@@ -7,22 +7,33 @@ export interface AudioEngineCallbacks {
   onError?: (err: string) => void;
 }
 
+// High-fidelity fallback audio bank when third-party direct stream is absent
+const AUDIO_STREAM_BANK: Record<string, string> = {
+  classical: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
+  arabic: 'https://commondatastorage.googleapis.com/codeskulptor-demos/DDR_assets/Sevish_-__nbsp_.mp3',
+  pop: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+  rap: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
+  relaxing: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3',
+  international: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+  trending: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+  all: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3',
+};
+
 class AudioEngine {
   private audio: HTMLAudioElement | null = null;
-  private audioCtx: AudioContext | null = null;
-  private synthInterval: number | null = null;
   private currentSong: Song | null = null;
   private isPlaying: boolean = false;
   private currentTime: number = 0;
   private duration: number = 0;
   private volume: number = 0.85;
   private callbacks: AudioEngineCallbacks | null = null;
-  private synthGainNode: GainNode | null = null;
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.audio = new Audio();
       this.audio.preload = 'auto';
+      this.audio.setAttribute('playsinline', 'true');
+      this.audio.setAttribute('webkit-playsinline', 'true');
 
       this.audio.addEventListener('timeupdate', () => {
         if (this.audio) {
@@ -39,10 +50,19 @@ class AudioEngine {
         this.callbacks?.onEnded();
       });
 
-      this.audio.addEventListener('error', () => {
-        // Fallback to Web Audio Synth if external audio stream is blocked or unavailable
-        console.warn('HTML5 Audio encountered an error, falling back to Web Audio Engine');
-        this.startSynthPlayback();
+      this.audio.addEventListener('play', () => {
+        this.isPlaying = true;
+        this.callbacks?.onPlayStateChange(true);
+      });
+
+      this.audio.addEventListener('pause', () => {
+        this.isPlaying = false;
+        this.callbacks?.onPlayStateChange(false);
+      });
+
+      this.audio.addEventListener('error', (e) => {
+        console.warn('HTML5 Audio error, trying fallback stream:', e);
+        this.tryFallbackStream();
       });
     }
   }
@@ -61,18 +81,10 @@ class AudioEngine {
     if (typeof window === 'undefined' || !('mediaSession' in navigator)) return;
 
     try {
-      navigator.mediaSession.setActionHandler('play', () => {
-        handlers.onPlay();
-      });
-      navigator.mediaSession.setActionHandler('pause', () => {
-        handlers.onPause();
-      });
-      navigator.mediaSession.setActionHandler('previoustrack', () => {
-        handlers.onPrev();
-      });
-      navigator.mediaSession.setActionHandler('nexttrack', () => {
-        handlers.onNext();
-      });
+      navigator.mediaSession.setActionHandler('play', () => handlers.onPlay());
+      navigator.mediaSession.setActionHandler('pause', () => handlers.onPause());
+      navigator.mediaSession.setActionHandler('previoustrack', () => handlers.onPrev());
+      navigator.mediaSession.setActionHandler('nexttrack', () => handlers.onNext());
       navigator.mediaSession.setActionHandler('seekto', (details) => {
         if (details.seekTime !== undefined) {
           handlers.onSeek(details.seekTime);
@@ -124,48 +136,63 @@ class AudioEngine {
         });
       }
     } catch {
-      // Ignored if position update fails during seek
+      // Ignored
     }
   }
 
+  private resolveSongAudioUrl(song: Song): string {
+    if (song.audio_url) return song.audio_url;
+    const cat = song.category || 'all';
+    return AUDIO_STREAM_BANK[cat] || AUDIO_STREAM_BANK.all;
+  }
+
   public async loadAndPlay(song: Song, autoPlay = true) {
-    this.stopSynth();
     this.currentSong = song;
     this.duration = song.duration || 180;
     this.currentTime = 0;
     this.updateMediaMetadata(song);
 
-    if (song.audio_url && this.audio) {
+    const streamUrl = this.resolveSongAudioUrl(song);
+
+    if (this.audio) {
       try {
-        this.audio.src = song.audio_url;
-        this.audio.volume = this.volume;
+        if (this.audio.src !== streamUrl) {
+          this.audio.src = streamUrl;
+          this.audio.volume = this.volume;
+          this.audio.load();
+        }
         if (autoPlay) {
           await this.audio.play();
           this.isPlaying = true;
           this.callbacks?.onPlayStateChange(true);
         }
-        return;
       } catch (err) {
-        console.warn('Could not play direct audio url, switching to Web Audio musical synth:', err);
+        console.warn('Audio playback play() error, trying fallback:', err);
+        this.tryFallbackStream();
       }
     }
+  }
 
-    // High quality Web Audio ambient/melodic generation fallback for instant musical feedback
-    if (autoPlay) {
-      this.startSynthPlayback();
+  private tryFallbackStream() {
+    if (!this.audio || !this.currentSong) return;
+    const fallback = AUDIO_STREAM_BANK.all;
+    if (this.audio.src !== fallback) {
+      this.audio.src = fallback;
+      this.audio.play().then(() => {
+        this.isPlaying = true;
+        this.callbacks?.onPlayStateChange(true);
+      }).catch(() => {});
     }
   }
 
   public play() {
-    if (this.currentSong && this.audio && this.audio.src && this.audio.src !== window.location.href) {
+    if (this.audio) {
       this.audio.play().then(() => {
         this.isPlaying = true;
         this.callbacks?.onPlayStateChange(true);
-      }).catch(() => {
-        this.startSynthPlayback();
+      }).catch((e) => {
+        console.warn('Play was prevented by browser policy:', e);
       });
-    } else if (this.currentSong) {
-      this.startSynthPlayback();
     }
   }
 
@@ -174,13 +201,12 @@ class AudioEngine {
     if (this.audio) {
       this.audio.pause();
     }
-    this.stopSynth();
     this.callbacks?.onPlayStateChange(false);
   }
 
   public seek(seconds: number) {
     this.currentTime = Math.max(0, Math.min(seconds, this.duration));
-    if (this.audio && this.audio.src && !isNaN(this.audio.duration)) {
+    if (this.audio && !isNaN(this.audio.duration)) {
       this.audio.currentTime = this.currentTime;
     }
     this.callbacks?.onTimeUpdate(this.currentTime, this.duration);
@@ -191,9 +217,6 @@ class AudioEngine {
     this.volume = Math.max(0, Math.min(val, 1));
     if (this.audio) {
       this.audio.volume = this.volume;
-    }
-    if (this.synthGainNode && this.audioCtx) {
-      this.synthGainNode.gain.setValueAtTime(this.volume * 0.15, this.audioCtx.currentTime);
     }
   }
 
@@ -211,91 +234,6 @@ class AudioEngine {
 
   public getIsPlaying(): boolean {
     return this.isPlaying;
-  }
-
-  /**
-   * Generates pleasing melodic tones (Arabic Maqam / warm pop acoustic chords)
-   * using Web Audio API when third-party CDN audio is not provided.
-   */
-  private startSynthPlayback() {
-    this.stopSynth();
-    try {
-      const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!this.audioCtx) {
-        this.audioCtx = new AudioCtxClass();
-      }
-      if (this.audioCtx.state === 'suspended') {
-        this.audioCtx.resume();
-      }
-
-      this.synthGainNode = this.audioCtx.createGain();
-      this.synthGainNode.gain.setValueAtTime(this.volume * 0.12, this.audioCtx.currentTime);
-      this.synthGainNode.connect(this.audioCtx.destination);
-
-      // Oriental and Modern musical note frequencies (Hz)
-      const isArabic = this.currentSong?.category === 'arabic' || this.currentSong?.category === 'classical';
-      // Rast / Bayati inspired frequencies vs Lofi Minor
-      const notes = isArabic
-        ? [220, 247.5, 261.63, 293.66, 329.63, 349.23, 392, 440]
-        : [261.63, 329.63, 392.00, 440.00, 523.25, 587.33];
-
-      let step = 0;
-      this.isPlaying = true;
-      this.callbacks?.onPlayStateChange(true);
-
-      const playNote = () => {
-        if (!this.isPlaying || !this.audioCtx || !this.synthGainNode) return;
-        
-        const osc = this.audioCtx.createOscillator();
-        const noteGain = this.audioCtx.createGain();
-        
-        const noteFreq = notes[step % notes.length];
-        step++;
-
-        osc.type = isArabic ? 'triangle' : 'sine';
-        osc.frequency.setValueAtTime(noteFreq, this.audioCtx.currentTime);
-
-        noteGain.gain.setValueAtTime(0.01, this.audioCtx.currentTime);
-        noteGain.gain.linearRampToValueAtTime(0.18, this.audioCtx.currentTime + 0.1);
-        noteGain.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 1.2);
-
-        osc.connect(noteGain);
-        noteGain.connect(this.synthGainNode);
-
-        osc.start();
-        osc.stop(this.audioCtx.currentTime + 1.3);
-      };
-
-      playNote();
-      this.synthInterval = window.setInterval(() => {
-        if (!this.isPlaying) return;
-        
-        this.currentTime += 0.5;
-        if (this.currentTime >= this.duration) {
-          this.currentTime = 0;
-          this.callbacks?.onEnded();
-        } else {
-          this.callbacks?.onTimeUpdate(this.currentTime, this.duration);
-          this.updateMediaSessionPosition();
-        }
-
-        if (Math.floor(this.currentTime * 2) % 2 === 0) {
-          playNote();
-        }
-      }, 500);
-
-    } catch (e) {
-      console.warn('Audio synth failed:', e);
-      this.isPlaying = true;
-      this.callbacks?.onPlayStateChange(true);
-    }
-  }
-
-  private stopSynth() {
-    if (this.synthInterval !== null) {
-      clearInterval(this.synthInterval);
-      this.synthInterval = null;
-    }
   }
 }
 
