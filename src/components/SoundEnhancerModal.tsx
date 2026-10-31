@@ -1,16 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMusic } from '../context/MusicContext';
 import { SoundEnhancerPreset, youtubeAudioService } from '../services/youtubeAudioService';
 import {
-  Sparkles,
   Sliders,
   Check,
   X,
-  Volume2,
-  Lock,
-  Headphones,
+  Sparkles,
   Zap,
+  Headphones,
   Radio,
+  RotateCcw,
 } from 'lucide-react';
 
 interface SoundEnhancerModalProps {
@@ -25,237 +24,280 @@ export const SoundEnhancerModal: React.FC<SoundEnhancerModalProps> = ({ isOpen, 
     soundEnhancerEnabled,
     toggleSoundEnhancer,
     isPlaying,
-    isRTL,
-    t,
   } = useMusic();
+
+  const [customEQ, setCustomEQState] = useState<{ bass: number; mid: number; treble: number }>(() =>
+    youtubeAudioService.getCustomEQ()
+  );
+
+  // Synchronize when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setCustomEQState(youtubeAudioService.getCustomEQ());
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const presets: {
     id: SoundEnhancerPreset;
-    titleAr: string;
-    titleEn: string;
-    descAr: string;
-    descEn: string;
-    badgeAr: string;
-    badgeEn: string;
+    title: string;
+    description: string;
+    badge: string;
     icon: React.ReactNode;
   }[] = [
     {
       id: 'studio',
-      titleAr: 'ستوديو ماسترينغ الاحترافي',
-      titleEn: 'Pro Studio Master',
-      descAr: 'معايرة صوتية متوازنة تمنح نقاءً عالي الدقة وتوزيعاً ديناميكياً ناعماً',
-      descEn: 'Mastering grade balanced acoustic profile with studio-level clarity',
-      badgeAr: 'الأكثر توازناً',
-      badgeEn: 'Balanced',
-      icon: <Sparkles className="w-5 h-5 text-purple-400" />,
+      title: 'Studio Master',
+      description: 'Balanced studio-grade acoustic profile',
+      badge: 'Balanced',
+      icon: <Sparkles className="w-4 h-4 text-white" />,
     },
     {
       id: 'bass_boost',
-      titleAr: 'مضخم البيس والجهير العميق',
-      titleEn: 'Deep Bass & Low Punch',
-      descAr: 'تعزيز قوي لترددات الساب-بيس (Sub-Bass) مع الحفاظ على صفاء الألحان',
-      descEn: 'Enhanced low frequencies (+5.5dB) for punchy kick drums & rich sub-bass',
-      badgeAr: 'إيقاع قوي',
-      badgeEn: 'Punchy',
-      icon: <Zap className="w-5 h-5 text-indigo-400" />,
+      title: 'Bass Boost',
+      description: 'Deep low-end punch & sub-bass warmth',
+      badge: '+8.5 dB',
+      icon: <Zap className="w-4 h-4 text-white" />,
     },
     {
       id: 'vocal',
-      titleAr: 'وضوح ونقاء الأصوات الطربية',
-      titleEn: 'Vocal Clarity Pro',
-      descAr: 'إبراز الحناجر الطربية والغناء بوضوح استثنائي لكلمات الأغاني',
-      descEn: 'Boosts vocal presence and lyric intelligibility for both Arabic and global hits',
-      badgeAr: 'غناء نقي',
-      badgeEn: 'Vocal Focus',
-      icon: <Headphones className="w-5 h-5 text-cyan-400" />,
+      title: 'Vocal Clarity',
+      description: 'Crisp vocal definition & lyric presence',
+      badge: 'Vocal Focus',
+      icon: <Headphones className="w-4 h-4 text-white" />,
     },
     {
       id: 'surround_3d',
-      titleAr: 'صوت محيطي ومسرحي 3D',
-      titleEn: 'Spatial 3D Concert',
-      descAr: 'توسيع استريو محيطي يحاكي حضور الحفلات المباشرة وقاعات الأوبرا',
-      descEn: 'Psychoacoustic soundstage widening creating an immersive concert atmosphere',
-      badgeAr: 'محيطي 3D',
-      badgeEn: 'Immersive',
-      icon: <Radio className="w-5 h-5 text-pink-400" />,
+      title: 'Spatial 3D',
+      description: 'Expansive binaural stereo soundstage',
+      badge: 'Immersive',
+      icon: <Radio className="w-4 h-4 text-white" />,
     },
   ];
+
+  const handlePresetSelect = (id: SoundEnhancerPreset) => {
+    setSoundEnhancerPreset(id);
+    setTimeout(() => {
+      setCustomEQState(youtubeAudioService.getCustomEQ());
+    }, 10);
+  };
+
+  const handleSliderChange = (band: 'bass' | 'mid' | 'treble', value: number) => {
+    const updated = { ...customEQ, [band]: value };
+    setCustomEQState(updated);
+    youtubeAudioService.setCustomEQ(updated.bass, updated.mid, updated.treble);
+  };
+
+  const handleResetFlat = () => {
+    const flat = { bass: 0, mid: 0, treble: 0 };
+    setCustomEQState(flat);
+    youtubeAudioService.setCustomEQ(0, 0, 0);
+  };
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Sound Enhancer & Lock Screen Controls"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+      aria-label="Sound Effects & Equalizer"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={onClose}
     >
-      <div className="relative w-full max-w-lg bg-[#14141e] border border-purple-500/30 rounded-3xl p-5 sm:p-6 shadow-2xl shadow-purple-950/60 overflow-hidden space-y-5">
-        {/* Ambient Top Glow */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-indigo-500 to-cyan-400" />
-
-        {/* Modal Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
-              <Sliders className="w-5 h-5" />
+      <div
+        className="relative w-full max-w-md bg-[#13131c] border border-[#222230] rounded-2xl p-5 sm:p-6 shadow-2xl text-white space-y-5 animate-in zoom-in-95 duration-150"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-[#222230]">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white text-black flex items-center justify-center font-bold shadow-md">
+              <Sliders className="w-4 h-4 text-black" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-black text-white">
-                {isRTL ? 'مُحسّن الصوت والـ EQ الذكي' : 'Smart Audio Enhancer & EQ'}
+              <h2 className="text-base font-bold text-white tracking-tight">
+                Sound Effects & EQ
               </h2>
               <p className="text-xs text-gray-400">
-                {isRTL
-                  ? 'تحسين جودة الصوت والتشغيل عند قفل الشاشة'
-                  : 'High-definition mastering & lock-screen playback'}
+                Acoustic mastering & tone shaping
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Active Lock-Screen & Silent Mode Confirmation Banner */}
-        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-[#1a1628] to-[#12121e] border border-purple-500/30 text-xs">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
-              <Lock className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="font-bold text-white">
-                {isRTL ? 'استمرار التشغيل عند قفل الشاشة نشط' : 'Lock-Screen Playback Active'}
-              </p>
-              <p className="text-[11px] text-gray-400">
-                {isRTL
-                  ? 'يواصل التطبيق تشغيل الصوت حتى عند قفل الهاتف أو وضعه بالوضع الصامت'
-                  : 'Plays continuously even when the screen is locked or phone is silenced'}
-              </p>
-            </div>
-          </div>
-
-          <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20 flex-shrink-0 ms-2">
-            <Check className="w-3 h-3" />
-            <span>{isRTL ? 'مفعّل' : 'Active'}</span>
-          </span>
-        </div>
-
-        {/* Equalizer Waveform Animation & Master Toggle */}
-        <div className="flex items-center justify-between p-3 rounded-2xl bg-[#101016] border border-white/5">
+        {/* Master Power Toggle */}
+        <div className="flex items-center justify-between p-3 rounded-xl bg-[#0e0e14] border border-[#222230]">
           <div className="flex items-center gap-3">
-            <div className="flex items-end gap-1 h-5 px-1">
-              <span
-                className={`w-1 rounded-full bg-purple-400 transition-all ${
-                  isPlaying && soundEnhancerEnabled ? 'animate-bounce h-5' : 'h-2'
-                }`}
-              />
-              <span
-                className={`w-1 rounded-full bg-cyan-400 transition-all ${
-                  isPlaying && soundEnhancerEnabled ? 'animate-bounce [animation-delay:-0.2s] h-4' : 'h-3'
-                }`}
-              />
-              <span
-                className={`w-1 rounded-full bg-indigo-400 transition-all ${
-                  isPlaying && soundEnhancerEnabled ? 'animate-bounce [animation-delay:-0.4s] h-5' : 'h-1.5'
-                }`}
-              />
-              <span
-                className={`w-1 rounded-full bg-pink-400 transition-all ${
-                  isPlaying && soundEnhancerEnabled ? 'animate-bounce [animation-delay:-0.1s] h-3' : 'h-2.5'
-                }`}
-              />
+            <div className="flex items-end gap-1 h-4 px-1">
+              {[1, 2, 3, 4].map((bar) => (
+                <span
+                  key={bar}
+                  className={`w-1 rounded-full transition-all duration-200 ${
+                    isPlaying && soundEnhancerEnabled
+                      ? 'bg-white animate-pulse'
+                      : 'bg-white/20 h-1.5'
+                  }`}
+                  style={{
+                    height: isPlaying && soundEnhancerEnabled ? `${(bar * 4) + 4}px` : '4px',
+                    animationDelay: `${bar * 0.15}s`,
+                  }}
+                />
+              ))}
             </div>
             <div>
               <p className="text-xs font-bold text-white">
-                {isRTL ? 'تفعيل تقنية تحسين الصوت HD' : 'HD Sound Processing'}
+                Sound Processing
               </p>
               <p className="text-[10px] text-gray-400 font-mono">
-                {soundEnhancerEnabled ? 'Dynamic Compressor + 3-Band Biquad Active' : 'Bypassed / Flat'}
+                {soundEnhancerEnabled ? 'Dynamic Equalizer Active' : 'Bypassed / Flat'}
               </p>
             </div>
           </div>
 
           <button
             onClick={toggleSoundEnhancer}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               soundEnhancerEnabled
-                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30'
+                ? 'bg-white text-black shadow'
                 : 'bg-white/10 text-gray-400 hover:text-white'
             }`}
           >
-            {soundEnhancerEnabled ? (isRTL ? 'مُفعّل' : 'ON') : (isRTL ? 'معطّل' : 'OFF')}
+            {soundEnhancerEnabled ? 'ON' : 'OFF'}
           </button>
         </div>
 
-        {/* Sound Presets List */}
-        <div className="space-y-2.5 max-h-64 overflow-y-auto no-scrollbar">
-          {presets.map((p) => {
-            const isSelected = soundEnhancerPreset === p.id && soundEnhancerEnabled;
-            return (
-              <button
-                key={p.id}
-                onClick={() => setSoundEnhancerPreset(p.id)}
-                className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                  isSelected
-                    ? 'bg-purple-950/40 border-purple-500/60 shadow-lg shadow-purple-950/50'
-                    : 'bg-[#181824] hover:bg-[#1f1f2e] border-white/5'
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div
-                    className={`p-2 rounded-xl flex-shrink-0 ${
-                      isSelected ? 'bg-purple-600/30 text-white' : 'bg-white/5 text-gray-400'
-                    }`}
-                  >
-                    {p.icon}
-                  </div>
-                  <div className="min-w-0 flex-1 text-left">
-                    <div className="flex items-center gap-2">
-                      <h4
-                        className={`text-sm font-bold truncate ${
-                          isSelected ? 'text-purple-300' : 'text-white'
-                        }`}
-                      >
-                        {isRTL ? p.titleAr : p.titleEn}
-                      </h4>
-                      <span className="text-[10px] font-semibold text-gray-400 bg-white/5 px-2 py-0.5 rounded-full flex-shrink-0">
-                        {isRTL ? p.badgeAr : p.badgeEn}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-400 truncate mt-0.5">
-                      {isRTL ? p.descAr : p.descEn}
-                    </p>
-                  </div>
-                </div>
-
-                <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+        {/* Presets Grid */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              Acoustic Presets
+            </h3>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {presets.map((p) => {
+              const isSelected = soundEnhancerPreset === p.id && soundEnhancerEnabled;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => handlePresetSelect(p.id)}
+                  className={`p-2.5 rounded-xl border text-left transition-colors flex flex-col justify-between cursor-pointer ${
                     isSelected
-                      ? 'bg-purple-500 text-white shadow-md shadow-purple-500/40'
-                      : 'border border-white/20'
+                      ? 'bg-[#1e1e2c] border-white text-white'
+                      : 'bg-[#101016] border-[#222230] text-gray-300 hover:border-gray-500'
                   }`}
                 >
-                  {isSelected && <Check className="w-3.5 h-3.5" />}
-                </div>
-              </button>
-            );
-          })}
+                  <div className="flex items-center justify-between mb-1">
+                    <div
+                      className={`p-1.5 rounded-lg ${
+                        isSelected ? 'bg-white text-black' : 'bg-white/5 text-gray-300'
+                      }`}
+                    >
+                      {p.icon}
+                    </div>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold truncate">{p.title}</p>
+                    <p className="text-[10px] text-gray-400 truncate mt-0.5">
+                      {p.badge}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Done / Close Button */}
-        <div className="pt-2">
-          <button
-            onClick={onClose}
-            className="w-full py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-bold shadow-lg shadow-purple-600/30 transition-all active:scale-[0.98]"
-          >
-            {isRTL ? 'حفظ وتطبيق إعدادات الصوت' : 'Apply Sound Enhancements'}
-          </button>
+        {/* Manual 3-Band Equalizer Sliders */}
+        <div className="p-3.5 rounded-xl bg-[#0e0e14] border border-[#222230] space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              3-Band Equalizer
+            </h3>
+            <button
+              onClick={handleResetFlat}
+              className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset</span>
+            </button>
+          </div>
+
+          {/* Bass */}
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-300">Bass (Low Shelf 90Hz)</span>
+              <span className="font-mono text-gray-400">
+                {customEQ.bass > 0 ? `+${customEQ.bass.toFixed(1)}` : customEQ.bass.toFixed(1)} dB
+              </span>
+            </div>
+            <input
+              type="range"
+              min="-12"
+              max="12"
+              step="0.5"
+              value={customEQ.bass}
+              disabled={!soundEnhancerEnabled}
+              onChange={(e) => handleSliderChange('bass', parseFloat(e.target.value))}
+              className="w-full h-1 accent-white cursor-pointer disabled:opacity-30"
+            />
+          </div>
+
+          {/* Mids */}
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-300">Mids (Vocals 3kHz)</span>
+              <span className="font-mono text-gray-400">
+                {customEQ.mid > 0 ? `+${customEQ.mid.toFixed(1)}` : customEQ.mid.toFixed(1)} dB
+              </span>
+            </div>
+            <input
+              type="range"
+              min="-12"
+              max="12"
+              step="0.5"
+              value={customEQ.mid}
+              disabled={!soundEnhancerEnabled}
+              onChange={(e) => handleSliderChange('mid', parseFloat(e.target.value))}
+              className="w-full h-1 accent-white cursor-pointer disabled:opacity-30"
+            />
+          </div>
+
+          {/* Treble */}
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-300">Treble (High Shelf 11kHz)</span>
+              <span className="font-mono text-gray-400">
+                {customEQ.treble > 0 ? `+${customEQ.treble.toFixed(1)}` : customEQ.treble.toFixed(1)} dB
+              </span>
+            </div>
+            <input
+              type="range"
+              min="-12"
+              max="12"
+              step="0.5"
+              value={customEQ.treble}
+              disabled={!soundEnhancerEnabled}
+              onChange={(e) => handleSliderChange('treble', parseFloat(e.target.value))}
+              className="w-full h-1 accent-white cursor-pointer disabled:opacity-30"
+            />
+          </div>
         </div>
+
+        {/* Done Button */}
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 rounded-xl bg-white text-black hover:bg-gray-200 text-xs font-bold transition-colors cursor-pointer shadow-lg"
+        >
+          Apply & Close
+        </button>
       </div>
     </div>
   );

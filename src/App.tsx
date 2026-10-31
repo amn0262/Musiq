@@ -5,12 +5,13 @@ import { BottomNav } from './components/BottomNav';
 import { MiniPlayer } from './components/MiniPlayer';
 import { FullScreenPlayer } from './components/FullScreenPlayer';
 import { AddToPlaylistModal } from './components/AddToPlaylistModal';
+import { SoundEnhancerModal } from './components/SoundEnhancerModal';
 import { SearchScreen } from './screens/SearchScreen';
 import { PlaylistsScreen } from './screens/PlaylistsScreen';
 import { LibraryScreen } from './screens/LibraryScreen';
 
 const AppContent: React.FC = () => {
-  const { activeTab } = useMusic();
+  const { activeTab, isSoundEnhancerOpen, closeSoundEnhancer } = useMusic();
 
   return (
     <div className="min-h-screen bg-[#0c0c10] text-[#f3f4f6] flex flex-col font-sans selection:bg-white selection:text-black">
@@ -39,6 +40,9 @@ const AppContent: React.FC = () => {
 
       {/* Add To Playlist Dialog */}
       <AddToPlaylistModal />
+
+      {/* Sound Effects & Equalizer Modal */}
+      <SoundEnhancerModal isOpen={isSoundEnhancerOpen} onClose={closeSoundEnhancer} />
 
       {/* Official YouTube Audio Stream Engine: In-viewport non-throttled audio playback */}
       <div

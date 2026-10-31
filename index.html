@@ -9,14 +9,23 @@
     <meta property="og:description" content="Audio-first music player with search and background playback." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Mobile PWA & Background Audio Metadata -->
+    <meta name="theme-color" content="#0c0c10" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MUSIQ" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icon-192.svg" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://www.youtube.com/iframe_api"></script>
   </head>
-  <body class="bg-[#101014] text-[#f3f4f6] antialiased selection:bg-purple-600 selection:text-white">
+  <body class="bg-[#0c0c10] text-[#f3f4f6] antialiased selection:bg-white selection:text-black">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
