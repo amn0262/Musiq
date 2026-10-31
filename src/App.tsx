@@ -13,11 +13,11 @@ const AppContent: React.FC = () => {
   const { activeTab } = useMusic();
 
   return (
-    <div className="min-h-screen bg-[#0b0b0f] text-[#f3f4f6] flex flex-col font-sans selection:bg-purple-600 selection:text-white">
+    <div className="min-h-screen bg-[#0c0c10] text-[#f3f4f6] flex flex-col font-sans selection:bg-white selection:text-black">
       {/* Sleek Minimal Header */}
       <Header />
 
-      {/* Main Content: Search Box & YouTube Discovery, Playlists, or Favorites */}
+      {/* Main Content: Search & YouTube Streaming, Playlists, or Favorites */}
       <main className="flex-1 w-full max-w-4xl mx-auto px-3 sm:px-6 pt-4">
         {activeTab === 'playlists' ? (
           <PlaylistsScreen />
@@ -40,10 +40,10 @@ const AppContent: React.FC = () => {
       {/* Add To Playlist Dialog */}
       <AddToPlaylistModal />
 
-      {/* Official YouTube Audio Stream Engine: Off-screen unthrottled audio decoding */}
+      {/* Official YouTube Audio Stream Engine: In-viewport non-throttled audio playback */}
       <div
         id="musiq-yt-player-container"
-        className="fixed -top-[9999px] -left-[9999px] w-[320px] h-[240px] pointer-events-none opacity-100 -z-50"
+        className="fixed bottom-0 right-0 w-1 h-1 pointer-events-none opacity-[0.01] z-0 overflow-hidden"
         aria-hidden="true"
       >
         <div id="musiq-yt-player" className="w-full h-full" />

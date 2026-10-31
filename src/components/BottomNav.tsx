@@ -13,7 +13,7 @@ export const BottomNav: React.FC = () => {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-30 bg-[#0d0d12]/95 backdrop-blur-xl border-t border-white/5 px-2 sm:px-6 py-2 transition-all"
+      className="fixed bottom-0 left-0 right-0 z-30 bg-[#0c0c10] border-t border-[#1f1f2c] px-2 sm:px-6 py-2 transition-colors"
       aria-label="Navigation"
     >
       <div className="max-w-md mx-auto flex items-center justify-around">
@@ -25,19 +25,14 @@ export const BottomNav: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl transition-all relative ${
+              className={`flex flex-col items-center justify-center py-1 px-4 rounded-xl transition-colors cursor-pointer ${
                 isActive
-                  ? 'text-purple-400 font-bold scale-105'
-                  : 'text-gray-400 hover:text-gray-200'
+                  ? 'text-white font-bold'
+                  : 'text-gray-500 hover:text-gray-300'
               }`}
             >
-              <div className="relative">
-                <Icon className={`w-5 h-5 transition-transform ${isActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-                {isActive && (
-                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_#c084fc]" />
-                )}
-              </div>
-              <span className="text-[11px] mt-1 font-medium tracking-tight">
+              <Icon className="w-5 h-5" />
+              <span className="text-[11px] mt-1 font-medium">
                 {isRTL ? tab.labelAr : tab.labelEn}
               </span>
             </button>

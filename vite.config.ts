@@ -109,10 +109,10 @@ function youtubeApiPlugin(): Plugin {
                         plays_count: 750000,
                       });
 
-                      if (videos.length >= 25) break;
+                      if (videos.length >= 75) break;
                     }
                   }
-                  if (videos.length >= 25) break;
+                  if (videos.length >= 75) break;
                 }
 
                 if (videos.length > 0) {

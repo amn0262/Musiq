@@ -1,4 +1,4 @@
-import { Playlist, UserProfile } from '../types/music';
+import { Playlist, UserProfile, Song } from '../types/music';
 import { INITIAL_PLAYLISTS } from '../data/catalog';
 
 const STORAGE_KEYS = {
@@ -67,7 +67,7 @@ export class StorageService {
     } catch (e) {
       console.warn('Favorites read failed', e);
     }
-    return ['ar-1', 'ar-2', 'int-1', 'ar-5'];
+    return [];
   }
 
   public static saveFavorites(favorites: string[]): void {
@@ -78,30 +78,48 @@ export class StorageService {
     }
   }
 
-  public static getRecentlyPlayed(): string[] {
+  public static getRecentSongs(): Song[] {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.RECENTLY_PLAYED);
-      if (data) return JSON.parse(data);
+      const data = localStorage.getItem('musiq_recent_songs_v3');
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch (e) {
-      console.warn('Recently played read failed', e);
+      console.warn('Recent songs read failed', e);
     }
-    return ['ar-2', 'int-1', 'ar-1', 'ar-6'];
+    return [];
   }
 
-  public static addRecentlyPlayed(songId: string): string[] {
-    const list = this.getRecentlyPlayed().filter((id) => id !== songId);
-    list.unshift(songId);
-    const capped = list.slice(0, 30);
+  public static addRecentSong(song: Song): Song[] {
+    const list = this.getRecentSongs().filter(
+      (s) => s.id !== song.id && s.provider_track_id !== song.provider_track_id
+    );
+    list.unshift(song);
+    const capped = list.slice(0, 50);
     try {
-      localStorage.setItem(STORAGE_KEYS.RECENTLY_PLAYED, JSON.stringify(capped));
+      localStorage.setItem('musiq_recent_songs_v3', JSON.stringify(capped));
     } catch (e) {
-      console.warn(e);
+      console.warn('Recent songs write failed', e);
     }
     return capped;
   }
 
-  public static clearRecentlyPlayed(): void {
+  public static clearRecentSongs(): void {
+    localStorage.removeItem('musiq_recent_songs_v3');
     localStorage.removeItem(STORAGE_KEYS.RECENTLY_PLAYED);
+  }
+
+  public static getRecentlyPlayed(): string[] {
+    return this.getRecentSongs().map((s) => s.id);
+  }
+
+  public static addRecentlyPlayed(songId: string): string[] {
+    return this.getRecentlyPlayed();
+  }
+
+  public static clearRecentlyPlayed(): void {
+    this.clearRecentSongs();
   }
 
   public static getSearchHistory(): string[] {

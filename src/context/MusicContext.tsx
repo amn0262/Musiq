@@ -254,23 +254,24 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const closeSoundEnhancer = useCallback(() => setIsSoundEnhancerOpen(false), []);
 
   // Playlists, Favorites, Songs Catalog
-  const [allSongs, setAllSongs] = useState<Song[]>(INITIAL_SONGS);
+  const [recentSongs, setRecentSongs] = useState<Song[]>(() => StorageService.getRecentSongs());
+  const [allSongs, setAllSongs] = useState<Song[]>(() => StorageService.getRecentSongs());
   const [playlists, setPlaylists] = useState<Playlist[]>(() => StorageService.getPlaylists());
   const [favorites, setFavorites] = useState<string[]>(() => StorageService.getFavorites());
-  const [recentlyPlayedIds, setRecentlyPlayedIds] = useState<string[]>(() => StorageService.getRecentlyPlayed());
 
-  // Player States
-  const [currentSong, setCurrentSong] = useState<Song | null>(() => INITIAL_SONGS[0]);
+  // Player States (initialized with most recently played song if available, or null)
+  const initialSong = recentSongs[0] || null;
+  const [currentSong, setCurrentSong] = useState<Song | null>(() => initialSong);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(INITIAL_SONGS[0].duration);
+  const [duration, setDuration] = useState<number>(initialSong?.duration || 210);
   const [volume, setVolumeState] = useState<number>(0.85);
   const [isShuffled, setIsShuffled] = useState<boolean>(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('all');
   const [playbackMode, setPlaybackMode] = useState<PlaybackEngineMode>('youtube');
 
   // Queue
-  const [queue, setQueue] = useState<Song[]>(INITIAL_SONGS);
+  const [queue, setQueue] = useState<Song[]>(() => (recentSongs.length > 0 ? recentSongs : []));
   const [queueIndex, setQueueIndex] = useState<number>(0);
 
   // Sync RTL attribute on document
@@ -334,8 +335,8 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const nextSong = queue[nextIdx];
       setCurrentSong(nextSong);
       youtubeAudioService.loadAndPlay(nextSong, true);
-      const updatedRecent = StorageService.addRecentlyPlayed(nextSong.id);
-      setRecentlyPlayedIds(updatedRecent);
+      const updatedRecent = StorageService.addRecentSong(nextSong);
+      setRecentSongs(updatedRecent);
     } else {
       setIsPlaying(false);
     }
@@ -396,9 +397,9 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return prev;
       });
 
-      // Update recently played
-      const updatedRecent = StorageService.addRecentlyPlayed(song.id);
-      setRecentlyPlayedIds(updatedRecent);
+      // Update recently played: top of the list is the most recent
+      const updatedRecent = StorageService.addRecentSong(song);
+      setRecentSongs(updatedRecent);
 
       // Trigger authentic YouTube audio playback
       youtubeAudioService.loadAndPlay(song, true);
@@ -424,8 +425,8 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const nextSong = queue[nextIdx];
       setCurrentSong(nextSong);
       youtubeAudioService.loadAndPlay(nextSong, true);
-      const updatedRecent = StorageService.addRecentlyPlayed(nextSong.id);
-      setRecentlyPlayedIds(updatedRecent);
+      const updatedRecent = StorageService.addRecentSong(nextSong);
+      setRecentSongs(updatedRecent);
     }
   }, [queue, queueIndex, repeatMode]);
 
@@ -442,8 +443,8 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const prevSong = queue[targetIndex];
       setCurrentSong(prevSong);
       youtubeAudioService.loadAndPlay(prevSong, true);
-      const updatedRecent = StorageService.addRecentlyPlayed(prevSong.id);
-      setRecentlyPlayedIds(updatedRecent);
+      const updatedRecent = StorageService.addRecentSong(prevSong);
+      setRecentSongs(updatedRecent);
     }
   }, [queue, queueIndex, currentTime]);
 
@@ -671,23 +672,22 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 
   const clearHistory = useCallback(() => {
-    StorageService.clearRecentlyPlayed();
+    StorageService.clearRecentSongs();
     StorageService.clearSearchHistory();
-    setRecentlyPlayedIds([]);
+    setRecentSongs([]);
   }, []);
 
   const findSongById = useCallback(
     (id: string) => {
-      return allSongs.find((s) => s.id === id);
+      return (
+        recentSongs.find((s) => s.id === id) ||
+        allSongs.find((s) => s.id === id)
+      );
     },
-    [allSongs]
+    [recentSongs, allSongs]
   );
 
-  const recentlyPlayed = useMemo(() => {
-    return recentlyPlayedIds
-      .map((id) => findSongById(id))
-      .filter((s): s is Song => Boolean(s));
-  }, [recentlyPlayedIds, findSongById]);
+  const recentlyPlayed = recentSongs;
 
   // Modals
   const openFullScreenPlayer = useCallback(() => setIsFullScreenPlayerOpen(true), []);

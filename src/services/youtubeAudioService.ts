@@ -17,9 +17,43 @@ export interface YouTubePlayerCallbacks {
   onError: (error: any) => void;
 }
 
-// 1-second inaudible looping audio carrier (PCM WAV) to keep iOS Safari & Android AudioSession active on lock screen & silent switch
-const SILENT_WAV_BASE64 =
-  'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+// Generates a genuine 5-second 16-bit PCM WAV audio blob
+// iOS Safari & Android audio daemons recognize this as a valid media stream and keep the audio thread active when the screen locks.
+function createSilentWavUrl(durationSec = 5): string {
+  if (typeof window === 'undefined') return '';
+  const sampleRate = 8000;
+  const numChannels = 1;
+  const numSamples = sampleRate * durationSec;
+  const blockAlign = numChannels * 2;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = numSamples * blockAlign;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  function writeAscii(offset: number, text: string) {
+    for (let i = 0; i < text.length; i++) {
+      view.setUint8(offset + i, text.charCodeAt(i));
+    }
+  }
+
+  writeAscii(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeAscii(8, 'WAVE');
+  writeAscii(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true);
+  writeAscii(36, 'data');
+  view.setUint32(40, dataSize, true);
+  // All sample bytes are 0 (pure silence)
+
+  const blob = new Blob([buffer], { type: 'audio/wav' });
+  return URL.createObjectURL(blob);
+}
 
 // 100% verified fallback video IDs in case any specific link or region encounters an embed restriction
 const YOUTUBE_BACKUPS: Record<string, string> = {
@@ -65,6 +99,7 @@ class YouTubeAudioService {
   private pendingTrack: { song: Song; autoPlay: boolean } | null = null;
   private currentVideoId: string = '';
   private failedVideoIds: Set<string> = new Set();
+  private keepaliveInterval: number | null = null;
 
   // Web Audio Equalizer & Compressor Nodes for Sound Enhancement
   private compressorNode: DynamicsCompressorNode | null = null;
@@ -80,7 +115,7 @@ class YouTubeAudioService {
 
   /**
    * Initializes media audio session and background keepalive carrier
-   * Allows playback even in hardware Silent Mode on iOS and Android
+   * Allows playback even in hardware Silent Mode and when screen is locked on iOS & Android
    */
   public initSilentModeAudioSession() {
     if (typeof window === 'undefined') return;
@@ -114,15 +149,33 @@ class YouTubeAudioService {
     window.addEventListener('click', unlockAudio, { once: true });
     window.addEventListener('touchstart', unlockAudio, { once: true });
 
-    // 3. Keepalive on visibilitychange (when screen locks or app minimizes)
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.isPlaying) {
+    // 3. Keepalive on visibilitychange, pagehide, and blur (when screen locks or app minimizes)
+    const handleBackgroundTransition = () => {
+      if (this.isPlaying) {
         this.carrierAudio?.play().catch(() => {});
         if ('mediaSession' in navigator) {
           navigator.mediaSession.playbackState = 'playing';
         }
+        if (this.audioCtx && this.audioCtx.state === 'suspended') {
+          this.audioCtx.resume().catch(() => {});
+        }
       }
-    });
+    };
+
+    document.addEventListener('visibilitychange', handleBackgroundTransition);
+    window.addEventListener('pagehide', handleBackgroundTransition);
+    window.addEventListener('blur', handleBackgroundTransition);
+
+    // Continuous audio watchdog timer to keep MediaSession actively registered
+    if (!this.keepaliveInterval) {
+      this.keepaliveInterval = window.setInterval(() => {
+        if (this.isPlaying && 'mediaSession' in navigator) {
+          if (navigator.mediaSession.playbackState !== 'playing') {
+            navigator.mediaSession.playbackState = 'playing';
+          }
+        }
+      }, 2000);
+    }
   }
 
   /**
@@ -133,7 +186,8 @@ class YouTubeAudioService {
   private initBackgroundCarrier() {
     if (typeof window === 'undefined') return;
     try {
-      this.carrierAudio = new Audio(SILENT_WAV_BASE64);
+      const silentUrl = createSilentWavUrl(5);
+      this.carrierAudio = new Audio(silentUrl);
       this.carrierAudio.loop = true;
       this.carrierAudio.volume = 0.001;
       this.carrierAudio.setAttribute('playsinline', 'true');

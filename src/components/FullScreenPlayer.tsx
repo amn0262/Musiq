@@ -15,14 +15,9 @@ import {
   FileText,
   Volume2,
   VolumeX,
-  Share2,
   PlusCircle,
-  Tv,
   Music,
   Trash2,
-  GripVertical,
-  Sliders,
-  Sparkles,
   Lock,
 } from 'lucide-react';
 
@@ -35,8 +30,6 @@ export const FullScreenPlayer: React.FC = () => {
     volume,
     isShuffled,
     repeatMode,
-    playbackMode,
-    setPlaybackMode,
     togglePlayPause,
     nextTrack,
     prevTrack,
@@ -47,9 +40,6 @@ export const FullScreenPlayer: React.FC = () => {
     isFavorite,
     toggleFavorite,
     openAddToPlaylist,
-    openSoundEnhancer,
-    soundEnhancerPreset,
-    soundEnhancerEnabled,
     isFullScreenPlayerOpen,
     closeFullScreenPlayer,
     queue,
@@ -66,7 +56,6 @@ export const FullScreenPlayer: React.FC = () => {
   if (!isFullScreenPlayerOpen || !currentSong) return null;
 
   const isFav = isFavorite(currentSong.id);
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   const handleMuteToggle = () => {
     if (volume > 0) {
@@ -87,203 +76,144 @@ export const FullScreenPlayer: React.FC = () => {
       role="dialog"
       aria-modal="true"
       aria-label="Full screen music player"
-      className="fixed inset-0 z-50 bg-[#0d0d12]/95 backdrop-blur-2xl flex flex-col justify-between overflow-hidden text-white animate-in fade-in zoom-in-95 duration-200"
+      className="fixed inset-0 z-50 bg-[#0c0c10] flex flex-col justify-between overflow-hidden text-white animate-in fade-in duration-150"
     >
-      {/* Dynamic Ambient Background Glow */}
-      <div
-        className="absolute inset-0 opacity-25 filter blur-[100px] pointer-events-none scale-125"
-        style={{
-          backgroundImage: `radial-gradient(circle at 50% 30%, #8b5cf6 0%, #06b6d4 40%, transparent 70%)`,
-        }}
-      />
-
       {/* Top Header Bar */}
-      <div className="relative z-10 px-4 sm:px-6 py-4 flex items-center justify-between border-b border-white/5">
+      <div className="relative z-10 px-4 sm:px-6 py-4 flex items-center justify-between border-b border-[#1f1f2c]">
         <button
           onClick={closeFullScreenPlayer}
-          className="p-2 -m-2 rounded-full hover:bg-white/10 text-gray-300 hover:text-white transition-colors active:scale-95"
+          className="p-2 -m-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
           aria-label="Minimize full player"
         >
           <ChevronDown className="w-6 h-6" />
         </button>
 
         <div className="text-center">
-          <p className="text-[11px] font-bold tracking-widest uppercase text-purple-400">
+          <p className="text-[11px] font-bold tracking-wider uppercase text-gray-400">
             {t('player_playing')}
           </p>
           <p className="text-xs text-gray-300 font-medium truncate max-w-[200px] sm:max-w-xs">
-            {currentSong.album || 'MUSIQ Special'}
+            {currentSong.album || 'YouTube Audio'}
           </p>
         </div>
 
-        {/* Official YouTube Audio Badge */}
-        <div className="flex items-center gap-1.5 bg-[#171724]/90 px-3 py-1 rounded-full border border-red-500/30 text-xs font-semibold text-red-400 shadow-sm">
-          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          <span>{isRTL ? 'صوت يوتيوب رسمي' : 'YouTube Audio'}</span>
+        {/* Lock Screen Status Badge */}
+        <div className="flex items-center gap-1.5 bg-[#161622] px-3 py-1 rounded-lg border border-[#2a2a3c] text-xs font-medium text-gray-300">
+          <Lock className="w-3 h-3 text-emerald-400" />
+          <span className="hidden sm:inline">{isRTL ? 'قفل الشاشة مفعّل' : 'Lock-Screen Active'}</span>
         </div>
       </div>
 
-      {/* Main Center Content (Tabs: Cover Art, Lyrics, Queue) */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-2 overflow-y-auto no-scrollbar">
-        {/* Tab 1: Elegant Audio-Only Cover Artwork with Live Sound Waves */}
+      {/* Main Center Content (Tabs: Audio Visualizer, Lyrics, Queue) */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-4 overflow-y-auto no-scrollbar">
+        {/* Tab 1: Minimalist Audio Display (No Image) */}
         {activeTab === 'cover' && (
           <div className="w-full max-w-sm sm:max-w-md flex flex-col items-center">
-            <div className="relative my-4 sm:my-6 group">
-              <div
-                className={`w-64 h-64 sm:w-80 sm:h-80 rounded-3xl overflow-hidden shadow-2xl transition-all duration-500 border border-white/10 ${
-                  isPlaying
-                    ? 'shadow-purple-500/30 ring-2 ring-purple-500/50 scale-100'
-                    : 'shadow-black/60 scale-95 opacity-90'
-                }`}
-              >
-                <img
-                  src={currentSong.artwork_url}
-                  alt={currentSong.title}
-                  className="w-full h-full object-cover"
-                />
-
-                {/* Audio-only equalizer waves overlay */}
-                {isPlaying && (
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end justify-center pb-4">
-                    <div className="flex items-end gap-1.5 h-6 px-4 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10">
-                      <span className="w-1 bg-red-400 rounded-full animate-bounce [animation-delay:-0.3s] h-5" />
-                      <span className="w-1 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s] h-3" />
-                      <span className="w-1 bg-cyan-400 rounded-full animate-bounce [animation-delay:-0.4s] h-6" />
-                      <span className="w-1 bg-purple-300 rounded-full animate-bounce [animation-delay:-0.2s] h-4" />
-                      <span className="text-[10px] font-bold text-gray-200 ms-1 font-mono">
-                        {isRTL ? 'صوت يوتيوب' : 'YouTube Audio'}
-                      </span>
-                    </div>
-                  </div>
-                )}
+            {/* Sleek Audio Waveform Visualizer Box */}
+            <div className="w-60 h-60 sm:w-72 sm:h-72 rounded-2xl bg-[#13131c] border border-[#222230] p-6 flex flex-col items-center justify-center shadow-xl my-4">
+              <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 text-gray-300">
+                <Music className="w-8 h-8" />
               </div>
 
-              {/* Dynamic Theme Glow Behind Album Art */}
-              {isPlaying && (
-                <div className="absolute -inset-2 rounded-3xl bg-gradient-to-r from-purple-600/35 via-cyan-500/25 to-indigo-600/35 filter blur-2xl -z-10 animate-pulse" />
-              )}
+              {/* Animated Audio Equalizer Bars */}
+              <div className="flex items-end gap-1.5 h-10 px-4 py-2">
+                {[1, 2, 3, 4, 5, 6, 7].map((bar) => (
+                  <span
+                    key={bar}
+                    className={`w-1.5 rounded-full transition-all duration-150 ${
+                      isPlaying
+                        ? 'bg-white animate-pulse'
+                        : 'bg-white/20 h-2'
+                    }`}
+                    style={{
+                      height: isPlaying ? `${Math.max(8, (bar * 5) % 36)}px` : '6px',
+                      animationDelay: `${bar * 0.1}s`,
+                    }}
+                  />
+                ))}
+              </div>
+
+              <span className="text-[11px] font-mono text-gray-400 mt-4">
+                {isRTL ? 'صوت يوتيوب عالي النقاء' : 'YouTube Pure Audio'}
+              </span>
             </div>
 
             {/* Song Meta Title & Artist */}
-            <div className="w-full text-center mt-3 sm:mt-4">
-              <div className="flex items-center justify-center gap-2">
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                  {isRTL && currentSong.titleAr ? currentSong.titleAr : currentSong.title}
-                </h2>
-                {currentSong.titleAr && !isRTL && (
-                  <span className="text-sm font-semibold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
-                    {currentSong.titleAr}
-                  </span>
-                )}
-              </div>
-              <p className="text-sm sm:text-base text-gray-300 font-medium mt-1">
+            <div className="w-full text-center mt-2">
+              <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight truncate px-2">
+                {isRTL && currentSong.titleAr ? currentSong.titleAr : currentSong.title}
+              </h2>
+              <p className="text-sm text-gray-400 font-medium mt-1 truncate">
                 {isRTL && currentSong.artistAr ? currentSong.artistAr : currentSong.artist}
               </p>
-              {currentSong.releaseYear && (
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {currentSong.album} • {currentSong.releaseYear}
-                </p>
-              )}
 
-              {/* Sound Enhancer Quick Trigger & Lock-Screen Status */}
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-3.5">
-                <button
-                  onClick={openSoundEnhancer}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-purple-500/20 to-indigo-500/20 hover:from-purple-500/30 hover:to-indigo-500/30 border border-purple-500/40 text-purple-200 text-xs font-semibold shadow-sm transition-all active:scale-95"
-                >
-                  <Sliders className="w-3.5 h-3.5 text-purple-400" />
-                  <span>
-                    {isRTL
-                      ? `مُحسّن الصوت: ${
-                          soundEnhancerPreset === 'studio'
-                            ? 'ستوديو احترافي'
-                            : soundEnhancerPreset === 'bass_boost'
-                            ? 'مضخم البيس'
-                            : soundEnhancerPreset === 'vocal'
-                            ? 'نقاء الغناء'
-                            : 'محيطي 3D'
-                        }`
-                      : `EQ: ${soundEnhancerPreset.replace('_', ' ').toUpperCase()}`}
-                  </span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                </button>
-
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
-                  <Lock className="w-3 h-3 text-emerald-400" />
-                  <span>{isRTL ? 'يعمل في الخلفية وعند قفل الشاشة' : 'Background & Lock-Screen Active'}</span>
-                </div>
+              {/* Lock-Screen Playback Active Pill */}
+              <div className="flex items-center justify-center gap-1.5 mt-3 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full w-fit mx-auto">
+                <Lock className="w-3 h-3 text-emerald-400" />
+                <span>{isRTL ? 'يتابع التشغيل عند قفل شاشة الموبايل' : 'Plays continuously on screen lock'}</span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Tab 2: Synced / Scrollable Lyrics View */}
+        {/* Tab 2: Lyrics View */}
         {activeTab === 'lyrics' && (
-          <div className="w-full max-w-lg h-72 sm:h-96 overflow-y-auto no-scrollbar p-6 bg-[#161622]/80 backdrop-blur-md rounded-3xl border border-white/10 text-center flex flex-col justify-center">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-purple-400 mb-4">
+          <div className="w-full max-w-lg h-72 sm:h-96 overflow-y-auto no-scrollbar p-6 bg-[#13131c] rounded-2xl border border-[#222230] text-center flex flex-col justify-center">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
               {t('player_lyrics')}
             </h3>
             {currentSong.lyricsAr && (
-              <div className="mb-6 space-y-2 font-arabic text-lg sm:text-xl font-semibold text-purple-100 leading-relaxed">
+              <div className="mb-4 space-y-2 text-base sm:text-lg font-semibold text-gray-200 leading-relaxed">
                 {currentSong.lyricsAr.split('\n').map((line, idx) => (
-                  <p key={idx} className="hover:text-cyan-300 transition-colors cursor-default">
-                    {line}
-                  </p>
+                  <p key={idx}>{line}</p>
                 ))}
               </div>
             )}
             {currentSong.lyrics && (
-              <div className="space-y-1.5 text-sm sm:text-base text-gray-300 font-medium">
+              <div className="space-y-1 text-sm text-gray-400">
                 {currentSong.lyrics.split('\n').map((line, idx) => (
-                  <p key={idx} className="hover:text-purple-300 transition-colors cursor-default">
-                    {line}
-                  </p>
+                  <p key={idx}>{line}</p>
                 ))}
               </div>
             )}
             {!currentSong.lyrics && !currentSong.lyricsAr && (
-              <p className="text-gray-400 text-sm">
-                {isRTL ? 'كلمات الأغنية غير متوفرة حالياً' : 'Lyrics are not available for this track.'}
+              <p className="text-gray-500 text-sm">
+                {isRTL ? 'كلمات الأغنية غير متوفرة' : 'Lyrics are not available.'}
               </p>
             )}
           </div>
         )}
 
-        {/* Tab 3: Up Next / Queue Drawer */}
+        {/* Tab 3: Queue Drawer (No Images) */}
         {activeTab === 'queue' && (
-          <div className="w-full max-w-lg h-72 sm:h-96 overflow-y-auto no-scrollbar p-4 bg-[#161622]/90 backdrop-blur-md rounded-3xl border border-white/10 flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-3">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-purple-400">
+          <div className="w-full max-w-lg h-72 sm:h-96 overflow-y-auto no-scrollbar p-4 bg-[#13131c] rounded-2xl border border-[#222230] flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-[#222230] mb-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
                 {t('player_queue')} ({queue.length})
               </h3>
-              <span className="text-xs text-gray-400">
-                {isShuffled ? 'Shuffled' : 'Standard'}
-              </span>
             </div>
 
-            <div className="space-y-2 overflow-y-auto flex-1">
+            <div className="space-y-1.5 overflow-y-auto flex-1">
               {queue.map((song, idx) => {
                 const isCurrent = idx === queueIndex;
                 return (
                   <div
                     key={`${song.id}-${idx}`}
-                    className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                    className={`flex items-center justify-between p-2 rounded-xl border transition-colors ${
                       isCurrent
-                        ? 'bg-purple-950/40 border-purple-500/40 text-white'
-                        : 'bg-white/5 border-transparent text-gray-300 hover:bg-white/10'
+                        ? 'bg-[#1c1c28] border-gray-400 text-white'
+                        : 'bg-[#121217] border-transparent text-gray-300 hover:bg-[#181822]'
                     }`}
                   >
                     <button
                       onClick={() => playSong(song, queue)}
-                      className="flex items-center gap-3 text-left flex-1 min-w-0"
+                      className="flex items-center gap-2.5 text-left flex-1 min-w-0 cursor-pointer"
                     >
-                      <img
-                        src={song.artwork_url}
-                        alt={song.title}
-                        className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-                      />
+                      <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 text-xs font-mono text-gray-400">
+                        {idx + 1}
+                      </div>
                       <div className="min-w-0 flex-1">
-                        <p className={`text-sm font-semibold truncate ${isCurrent ? 'text-purple-300' : ''}`}>
+                        <p className={`text-sm truncate ${isCurrent ? 'font-bold text-white' : ''}`}>
                           {isRTL && song.titleAr ? song.titleAr : song.title}
                         </p>
                         <p className="text-xs text-gray-400 truncate">
@@ -292,15 +222,14 @@ export const FullScreenPlayer: React.FC = () => {
                       </div>
                     </button>
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400 font-mono">
+                    <div className="flex items-center gap-1.5 ms-2">
+                      <span className="text-xs text-gray-500 font-mono">
                         {formatDuration(song.duration)}
                       </span>
                       {queue.length > 1 && (
                         <button
                           onClick={() => removeFromQueue(idx)}
-                          className="p-1 text-gray-400 hover:text-rose-400 transition-colors"
-                          title="Remove from queue"
+                          className="p-1 text-gray-500 hover:text-white transition-colors cursor-pointer"
                           aria-label={`Remove ${song.title} from queue`}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -326,7 +255,7 @@ export const FullScreenPlayer: React.FC = () => {
             step="0.5"
             value={currentTime}
             onChange={handleSeekChange}
-            className="w-full"
+            className="w-full accent-white"
             aria-label="Track progress slider"
           />
           <div className="flex justify-between items-center text-xs text-gray-400 font-mono mt-1 px-1">
@@ -335,17 +264,14 @@ export const FullScreenPlayer: React.FC = () => {
           </div>
         </div>
 
-        {/* Primary Playback Controls Bar */}
+        {/* Primary Controls */}
         <div className="flex items-center justify-between gap-4 py-2">
-          {/* Shuffle Button */}
+          {/* Shuffle */}
           <button
             onClick={toggleShuffle}
-            className={`p-2.5 rounded-full transition-all ${
-              isShuffled
-                ? 'text-purple-400 bg-purple-500/20 ring-1 ring-purple-500/40'
-                : 'text-gray-400 hover:text-white'
+            className={`p-2.5 rounded-xl transition-colors cursor-pointer ${
+              isShuffled ? 'text-white bg-white/10' : 'text-gray-400 hover:text-white'
             }`}
-            title="Toggle Shuffle"
             aria-label={isShuffled ? 'Disable Shuffle' : 'Enable Shuffle'}
           >
             <Shuffle className="w-5 h-5" />
@@ -354,132 +280,94 @@ export const FullScreenPlayer: React.FC = () => {
           {/* Previous Track */}
           <button
             onClick={prevTrack}
-            className="p-3 text-gray-200 hover:text-white transition-transform active:scale-90"
-            title="Previous Track"
+            className="p-3 text-gray-300 hover:text-white transition-colors cursor-pointer"
             aria-label="Previous track"
           >
-            <SkipBack className="w-7 h-7" />
+            <SkipBack className="w-6 h-6" />
           </button>
 
-          {/* Large Play / Pause Button with Glow */}
+          {/* Main Play / Pause Button */}
           <button
             onClick={togglePlayPause}
-            className="w-16 h-16 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:scale-105 text-white flex items-center justify-center shadow-xl shadow-purple-600/50 hover:shadow-purple-600/70 transition-all active:scale-95"
+            className="w-14 h-14 rounded-2xl bg-white text-black hover:bg-gray-200 flex items-center justify-center font-bold shadow-lg transition-transform active:scale-95 cursor-pointer"
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
-              <Pause className="w-7 h-7 fill-white" />
+              <Pause className="w-6 h-6 fill-current" />
             ) : (
-              <Play className="w-7 h-7 fill-white ms-1" />
+              <Play className="w-6 h-6 fill-current ms-0.5" />
             )}
           </button>
 
           {/* Next Track */}
           <button
             onClick={nextTrack}
-            className="p-3 text-gray-200 hover:text-white transition-transform active:scale-90"
-            title="Next Track"
+            className="p-3 text-gray-300 hover:text-white transition-colors cursor-pointer"
             aria-label="Next track"
           >
-            <SkipForward className="w-7 h-7" />
+            <SkipForward className="w-6 h-6" />
           </button>
 
-          {/* Repeat Mode Button */}
+          {/* Repeat Mode */}
           <button
             onClick={cycleRepeatMode}
-            className={`p-2.5 rounded-full transition-all relative ${
-              repeatMode !== 'off'
-                ? 'text-cyan-400 bg-cyan-500/20 ring-1 ring-cyan-500/40'
-                : 'text-gray-400 hover:text-white'
+            className={`p-2.5 rounded-xl transition-colors cursor-pointer ${
+              repeatMode !== 'off' ? 'text-white bg-white/10' : 'text-gray-400 hover:text-white'
             }`}
-            title={`Repeat: ${repeatMode}`}
             aria-label={`Cycle repeat mode, currently ${repeatMode}`}
           >
-            {repeatMode === 'one' ? (
-              <Repeat1 className="w-5 h-5" />
-            ) : (
-              <Repeat className="w-5 h-5" />
-            )}
+            {repeatMode === 'one' ? <Repeat1 className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
           </button>
         </div>
 
-        {/* Secondary Auxiliary Controls: Favorites, Add to Playlist, Lyrics, Queue, Volume */}
-        <div className="flex items-center justify-between pt-4 border-t border-white/5 gap-2">
-          {/* Favorite Button */}
+        {/* Auxiliary Controls: Favorite, Add to Playlist, Lyrics, Queue, Volume */}
+        <div className="flex items-center justify-between pt-3 border-t border-[#1f1f2c] gap-2">
           <button
             onClick={() => toggleFavorite(currentSong.id)}
-            className={`p-2 rounded-full transition-transform active:scale-90 ${
-              isFav ? 'text-pink-500' : 'text-gray-400 hover:text-white'
+            className={`p-2 rounded-lg transition-colors cursor-pointer ${
+              isFav ? 'text-white' : 'text-gray-400 hover:text-white'
             }`}
-            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+            aria-label="Favorite"
           >
-            <Heart className={`w-5 h-5 ${isFav ? 'fill-pink-500' : ''}`} />
+            <Heart className={`w-5 h-5 ${isFav ? 'fill-white' : ''}`} />
           </button>
 
-          {/* Add to Playlist */}
           <button
             onClick={() => openAddToPlaylist(currentSong)}
-            className="p-2 text-gray-400 hover:text-purple-300 transition-colors"
-            title={t('player_add_playlist')}
+            className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer"
             aria-label={t('player_add_playlist')}
           >
             <PlusCircle className="w-5 h-5" />
           </button>
 
-          {/* Lyrics Tab Toggle */}
           <button
             onClick={() => setActiveTab(activeTab === 'lyrics' ? 'cover' : 'lyrics')}
-            className={`p-2 rounded-full transition-colors ${
-              activeTab === 'lyrics'
-                ? 'text-purple-400 bg-purple-500/20'
-                : 'text-gray-400 hover:text-white'
+            className={`p-2 rounded-lg transition-colors cursor-pointer ${
+              activeTab === 'lyrics' ? 'text-white bg-white/10' : 'text-gray-400 hover:text-white'
             }`}
-            title={t('player_lyrics')}
             aria-label={t('player_lyrics')}
           >
             <FileText className="w-5 h-5" />
           </button>
 
-          {/* Queue Tab Toggle */}
           <button
             onClick={() => setActiveTab(activeTab === 'queue' ? 'cover' : 'queue')}
-            className={`p-2 rounded-full transition-colors ${
-              activeTab === 'queue'
-                ? 'text-purple-400 bg-purple-500/20'
-                : 'text-gray-400 hover:text-white'
+            className={`p-2 rounded-lg transition-colors cursor-pointer ${
+              activeTab === 'queue' ? 'text-white bg-white/10' : 'text-gray-400 hover:text-white'
             }`}
-            title={t('player_queue')}
             aria-label={t('player_queue')}
           >
             <ListMusic className="w-5 h-5" />
           </button>
 
-          {/* Sound Enhancer EQ Trigger */}
-          <button
-            onClick={openSoundEnhancer}
-            className={`p-2 rounded-full transition-colors ${
-              soundEnhancerEnabled
-                ? 'text-cyan-400 bg-cyan-500/20'
-                : 'text-gray-400 hover:text-white'
-            }`}
-            title={isRTL ? 'مُحسّن الصوت والـ EQ' : 'Sound Enhancer & EQ'}
-            aria-label={isRTL ? 'مُحسّن الصوت والـ EQ' : 'Sound Enhancer & EQ'}
-          >
-            <Sliders className="w-5 h-5" />
-          </button>
-
           {/* Volume Control */}
-          <div className="flex items-center gap-2 flex-1 max-w-[140px] ms-2">
+          <div className="flex items-center gap-2 flex-1 max-w-[130px] ms-2">
             <button
               onClick={handleMuteToggle}
-              className="text-gray-400 hover:text-white transition-colors"
+              className="text-gray-400 hover:text-white transition-colors cursor-pointer"
               aria-label={volume === 0 ? 'Unmute' : 'Mute'}
             >
-              {volume === 0 ? (
-                <VolumeX className="w-4 h-4 text-rose-400" />
-              ) : (
-                <Volume2 className="w-4 h-4" />
-              )}
+              {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
             </button>
             <input
               type="range"
@@ -488,7 +376,7 @@ export const FullScreenPlayer: React.FC = () => {
               step="0.05"
               value={volume}
               onChange={(e) => setVolume(parseFloat(e.target.value))}
-              className="w-full h-1"
+              className="w-full h-1 accent-white"
               aria-label="Volume slider"
             />
           </div>

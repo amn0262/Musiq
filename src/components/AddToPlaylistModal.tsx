@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMusic } from '../context/MusicContext';
-import { X, Plus, Check, Music2 } from 'lucide-react';
+import { X, Plus, Check, Music } from 'lucide-react';
 
 export const AddToPlaylistModal: React.FC = () => {
   const {
@@ -54,26 +54,24 @@ export const AddToPlaylistModal: React.FC = () => {
       aria-label="Add to playlist modal"
       className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
     >
-      <div className="w-full max-w-md bg-[#161622] border border-white/10 rounded-3xl p-6 shadow-2xl relative text-white">
+      <div className="w-full max-w-md bg-[#13131c] border border-[#242434] rounded-2xl p-5 shadow-2xl relative text-white">
         <button
           onClick={closeAddToPlaylist}
-          className="absolute top-5 right-5 p-1 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+          className="absolute top-4 right-4 p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
           aria-label="Close modal"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <h3 className="text-lg font-bold text-white mb-2">
+        <h3 className="text-base font-bold text-white mb-3">
           {t('player_add_playlist')}
         </h3>
 
-        {/* Selected Song Preview */}
-        <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10 mb-5">
-          <img
-            src={songForPlaylistModal.artwork_url}
-            alt={songForPlaylistModal.title}
-            className="w-12 h-12 rounded-xl object-cover"
-          />
+        {/* Selected Song Preview without image */}
+        <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5 border border-white/10 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0 text-gray-300">
+            <Music className="w-5 h-5" />
+          </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold truncate">
               {isRTL && songForPlaylistModal.titleAr
@@ -89,7 +87,7 @@ export const AddToPlaylistModal: React.FC = () => {
         </div>
 
         {feedback && (
-          <div className="mb-4 p-2.5 rounded-xl bg-purple-500/20 border border-purple-500/30 text-xs font-semibold text-purple-200 text-center animate-in fade-in">
+          <div className="mb-3 p-2 rounded-lg bg-white/10 border border-white/20 text-xs font-semibold text-white text-center">
             {feedback}
           </div>
         )}
@@ -101,12 +99,12 @@ export const AddToPlaylistModal: React.FC = () => {
             placeholder={isRTL ? 'اسم قائمة تشغيل جديدة...' : 'New playlist name...'}
             value={newPlaylistName}
             onChange={(e) => setNewPlaylistName(e.target.value)}
-            className="flex-1 bg-[#101014] border border-white/10 rounded-xl px-3.5 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+            className="flex-1 bg-[#0e0e13] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-gray-400 transition-colors"
           />
           <button
             type="submit"
             disabled={!newPlaylistName.trim()}
-            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1 transition-all"
+            className="px-3.5 py-2 rounded-xl bg-white text-black hover:bg-gray-200 disabled:opacity-40 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>{isRTL ? 'إنشاء' : 'Create'}</span>
@@ -114,7 +112,7 @@ export const AddToPlaylistModal: React.FC = () => {
         </form>
 
         {/* Existing Playlists List */}
-        <div className="max-h-56 overflow-y-auto space-y-2 no-scrollbar pr-1">
+        <div className="max-h-52 overflow-y-auto space-y-1.5 no-scrollbar pr-1">
           {playlists.map((pl) => {
             const isAlreadyAdded = pl.song_ids.includes(songForPlaylistModal.id);
 
@@ -122,19 +120,15 @@ export const AddToPlaylistModal: React.FC = () => {
               <button
                 key={pl.id}
                 onClick={() => handleAddToPlaylist(pl.id)}
-                className={`w-full flex items-center justify-between p-3 rounded-2xl border transition-all text-left ${
+                className={`w-full flex items-center justify-between p-2.5 rounded-xl border transition-colors text-left cursor-pointer ${
                   isAlreadyAdded
-                    ? 'bg-purple-950/20 border-purple-500/30 opacity-75'
-                    : 'bg-[#101014]/60 hover:bg-[#1f1f2e] border-white/5 hover:border-purple-500/40'
+                    ? 'bg-white/5 border-white/10 opacity-60'
+                    : 'bg-[#181822] hover:bg-[#20202c] border-[#262638]'
                 }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-700 to-indigo-900 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    {pl.cover_url ? (
-                      <img src={pl.cover_url} alt={pl.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <Music2 className="w-5 h-5 text-purple-300" />
-                    )}
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+                    <Music className="w-4 h-4 text-gray-300" />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-white truncate">{pl.name}</p>
@@ -146,12 +140,12 @@ export const AddToPlaylistModal: React.FC = () => {
 
                 <div className="flex-shrink-0 ms-2">
                   {isAlreadyAdded ? (
-                    <span className="flex items-center gap-1 text-[11px] font-semibold text-purple-300">
+                    <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
                       <Check className="w-3.5 h-3.5" />
                       <span>{isRTL ? 'مضافة' : 'Added'}</span>
                     </span>
                   ) : (
-                    <span className="text-xs font-bold text-gray-400 hover:text-white bg-white/5 px-2.5 py-1 rounded-lg">
+                    <span className="text-xs font-bold text-gray-300 bg-white/10 px-2 py-0.5 rounded">
                       {isRTL ? 'إضافة' : 'Add'}
                     </span>
                   )}
