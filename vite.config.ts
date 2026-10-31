@@ -62,27 +62,39 @@ function youtubeApiPlugin(): Plugin {
               headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept-Language': 'ar,en;q=0.9',
+                'Cookie': 'CONSENT=YES+cb.20210328-17-p0.en+FX+478; SOCS=CAESEwgDEgk0ODE3Nzk3MjQaAmVuIAEaBgiA_LyaBg',
               },
             });
 
             if (response.ok) {
               const html = await response.text();
-              const match = html.match(/(?:var\s+)?ytInitialData\s*=\s*({.+?});<\/script>/s);
+              const match =
+                html.match(/(?:var\s+)?ytInitialData\s*=\s*({.+?});<\/script>/s) ||
+                html.match(/window\["ytInitialData"\]\s*=\s*({.+?});<\/script>/s);
 
               if (match && match[1]) {
                 const parsedData = JSON.parse(match[1]);
-                const contents = parsedData.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents;
+                const sections =
+                  parsedData.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+                const videos: any[] = [];
+                const seenIds = new Set<string>();
 
-                if (Array.isArray(contents)) {
-                  const videos: any[] = [];
-                  for (const item of contents) {
-                    if (item.videoRenderer && item.videoRenderer.videoId) {
-                      const vr = item.videoRenderer;
+                for (const sec of sections) {
+                  const items = sec.itemSectionRenderer?.contents || [];
+                  for (const item of items) {
+                    const vr = item.videoRenderer || item.compactVideoRenderer;
+                    if (vr && vr.videoId && !seenIds.has(vr.videoId)) {
+                      seenIds.add(vr.videoId);
                       const videoId = vr.videoId;
-                      const title = vr.title?.runs?.map((r: any) => r.text).join('') || 'Unknown Song';
-                      const artist = vr.ownerText?.runs?.map((r: any) => r.text).join('') || 'YouTube Artist';
+                      const title =
+                        vr.title?.runs?.map((r: any) => r.text).join('') || vr.title?.simpleText || 'Unknown Song';
+                      const artist =
+                        vr.ownerText?.runs?.map((r: any) => r.text).join('') ||
+                        vr.shortBylineText?.runs?.map((r: any) => r.text).join('') ||
+                        'YouTube Artist';
                       const durationStr = vr.lengthText?.simpleText;
-                      const thumb = vr.thumbnail?.thumbnails?.slice(-1)[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+                      const thumb =
+                        vr.thumbnail?.thumbnails?.slice(-1)[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
                       videos.push({
                         id: `yt-${videoId}`,
@@ -97,10 +109,13 @@ function youtubeApiPlugin(): Plugin {
                         plays_count: 750000,
                       });
 
-                      if (videos.length >= 15) break;
+                      if (videos.length >= 25) break;
                     }
                   }
+                  if (videos.length >= 25) break;
+                }
 
+                if (videos.length > 0) {
                   res.setHeader('Content-Type', 'application/json');
                   return res.end(JSON.stringify({ results: videos }));
                 }

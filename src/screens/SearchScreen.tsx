@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useMusic } from '../context/MusicContext';
 import { SearchService, extractYouTubeVideoId } from '../services/searchService';
 import { StorageService } from '../services/storage';
@@ -31,18 +31,18 @@ export const SearchScreen: React.FC = () => {
     toggleFavorite,
     openAddToPlaylist,
     isRTL,
-    t,
   } = useMusic();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [searchHistory, setSearchHistory] = useState<string[]>(() => StorageService.getSearchHistory());
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const [youtubeResults, setYoutubeResults] = useState<Song[]>([]);
   const [isSearchingYouTube, setIsSearchingYouTube] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [directLinkInput, setDirectLinkInput] = useState('');
-  const [, startTransition] = useTransition();
+  
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -56,69 +56,23 @@ export const SearchScreen: React.FC = () => {
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // Debounce search input by 280ms
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(searchQuery);
-    }, 280);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  // Fetch real-time YouTube suggestions while typing
-  useEffect(() => {
-    if (searchQuery.trim().length > 0) {
-      SearchService.getRemoteSuggestions(searchQuery).then((sug) => {
-        setSuggestions(sug);
-        if (sug.length > 0) {
-          setShowSuggestions(true);
-        }
-      });
-    } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
-    }
-  }, [searchQuery]);
-
-  // Execute real YouTube search when debounced query changes
-  useEffect(() => {
-    const q = debouncedQuery.trim();
+  /**
+   * Primary Search Function: Fetches live YouTube search results and populates the list
+   */
+  const performSearch = async (queryText: string, autoPlayFirst = false) => {
+    const q = queryText.trim();
     if (!q) {
       setYoutubeResults([]);
+      setHasSearched(false);
       setIsSearchingYouTube(false);
       return;
     }
 
-    // Save to history when search has substance
-    if (q.length >= 2) {
-      const updated = StorageService.addSearchQuery(q);
-      setSearchHistory(updated);
-    }
-
-    setIsSearchingYouTube(true);
-    SearchService.searchYouTubeMusic(q)
-      .then((results) => {
-        startTransition(() => {
-          setYoutubeResults(results || []);
-        });
-      })
-      .catch((e) => {
-        console.warn('YouTube search error:', e);
-      })
-      .finally(() => {
-        setIsSearchingYouTube(false);
-      });
-  }, [debouncedQuery]);
-
-  /**
-   * Immediately hides suggestions and triggers instant audio playback of the selected track
-   */
-  const handleSelectSuggestionAndPlay = async (q: string) => {
     setShowSuggestions(false);
-    setSuggestions([]);
-    setSearchQuery(q);
-    setDebouncedQuery(q);
+    setIsSearchingYouTube(true);
+    setHasSearched(true);
 
-    // 1. Direct YouTube Video ID or URL paste support
+    // 1. Direct YouTube Video ID or URL support
     const directYtId = extractYouTubeVideoId(q);
     if (directYtId) {
       const directTrack: Song = {
@@ -133,44 +87,103 @@ export const SearchScreen: React.FC = () => {
         provider_track_id: directYtId,
         plays_count: 1000000,
       };
+      setYoutubeResults([directTrack, ...allSongs]);
+      setIsSearchingYouTube(false);
       playSong(directTrack, [directTrack, ...allSongs]);
       return;
     }
 
-    // 2. Immediate playback from catalog if matched
-    const localMatch = allSongs.find(
-      (s) =>
-        matchesQuery(s.title, q) ||
-        (s.titleAr && matchesQuery(s.titleAr, q)) ||
-        matchesQuery(s.artist, q) ||
-        (s.artistAr && matchesQuery(s.artistAr, q))
-    );
-
-    if (localMatch) {
-      playSong(localMatch, allSongs);
-      return;
+    // Save to history
+    if (q.length >= 2) {
+      const updated = StorageService.addSearchQuery(q);
+      setSearchHistory(updated);
     }
 
-    // 3. Query YouTube live endpoint and immediately play first result
-    setIsSearchingYouTube(true);
     try {
-      const ytResults = await SearchService.searchYouTubeMusic(q);
-      if (ytResults && ytResults.length > 0) {
-        setYoutubeResults(ytResults);
-        playSong(ytResults[0], ytResults);
+      const results = await SearchService.searchYouTubeMusic(q);
+      
+      // If live YouTube returned results, use them
+      if (results && results.length > 0) {
+        setYoutubeResults(results);
+        if (autoPlayFirst) {
+          playSong(results[0], results);
+        }
+      } else {
+        // Fallback to local catalog matches
+        const localMatches = allSongs.filter(
+          (s) =>
+            matchesQuery(s.title, q) ||
+            (s.titleAr && matchesQuery(s.titleAr, q)) ||
+            matchesQuery(s.artist, q) ||
+            (s.artistAr && matchesQuery(s.artistAr, q))
+        );
+        setYoutubeResults(localMatches);
+        if (autoPlayFirst && localMatches.length > 0) {
+          playSong(localMatches[0], localMatches);
+        }
       }
     } catch (e) {
-      console.warn('Direct suggestion play error:', e);
+      console.warn('Search error, using catalog fallback:', e);
+      const localMatches = allSongs.filter(
+        (s) =>
+          matchesQuery(s.title, q) ||
+          (s.titleAr && matchesQuery(s.titleAr, q)) ||
+          matchesQuery(s.artist, q) ||
+          (s.artistAr && matchesQuery(s.artistAr, q))
+      );
+      setYoutubeResults(localMatches);
+      if (autoPlayFirst && localMatches.length > 0) {
+        playSong(localMatches[0], localMatches);
+      }
     } finally {
       setIsSearchingYouTube(false);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && searchQuery.trim()) {
-      e.preventDefault();
-      handleSelectSuggestionAndPlay(searchQuery);
+  // Debounced search on input change
+  const handleInputChange = (val: string) => {
+    setSearchQuery(val);
+    setShowSuggestions(true);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
     }
+
+    if (!val.trim()) {
+      setSuggestions([]);
+      setYoutubeResults([]);
+      setHasSearched(false);
+      setIsSearchingYouTube(false);
+      return;
+    }
+
+    // Fetch quick suggestions
+    SearchService.getRemoteSuggestions(val).then((sug) => {
+      setSuggestions(sug);
+    });
+
+    // Debounce the live search by 400ms
+    searchTimeoutRef.current = setTimeout(() => {
+      performSearch(val, false);
+    }, 400);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      performSearch(searchQuery, false);
+    }
+  };
+
+  const handleSelectSuggestionAndPlay = (sug: string) => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    setSearchQuery(sug);
+    performSearch(sug, true);
   };
 
   const handleClearHistory = () => {
@@ -194,7 +207,7 @@ export const SearchScreen: React.FC = () => {
   const handleDirectLinkSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!directLinkInput.trim()) return;
-    handleSelectSuggestionAndPlay(directLinkInput.trim());
+    performSearch(directLinkInput.trim(), true);
     setDirectLinkInput('');
   };
 
@@ -209,10 +222,7 @@ export const SearchScreen: React.FC = () => {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setShowSuggestions(true);
-            }}
+            onChange={(e) => handleInputChange(e.target.value)}
             onFocus={() => {
               if (suggestions.length > 0) setShowSuggestions(true);
             }}
@@ -224,16 +234,22 @@ export const SearchScreen: React.FC = () => {
           {searchQuery && (
             <button
               onClick={() => {
+                if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
                 setSearchQuery('');
                 setSuggestions([]);
                 setShowSuggestions(false);
                 setYoutubeResults([]);
+                setHasSearched(false);
+                setIsSearchingYouTube(false);
               }}
               className="p-1 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
               aria-label="Clear"
             >
               <X className="w-5 h-5" />
             </button>
+          )}
+          {isSearchingYouTube && (
+            <Loader2 className="w-5 h-5 text-purple-400 animate-spin ms-2 flex-shrink-0" />
           )}
         </div>
 
@@ -289,14 +305,14 @@ export const SearchScreen: React.FC = () => {
         <button
           type="submit"
           disabled={!directLinkInput.trim()}
-          className="px-3 sm:px-4 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-red-900/30 transition-all active:scale-95 flex-shrink-0"
+          className="px-3 sm:px-4 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-red-900/30 transition-all active:scale-95 flex-shrink-0 cursor-pointer"
         >
           <Play className="w-3.5 h-3.5 fill-current" />
           <span>{isRTL ? 'تشغيل' : 'Play'}</span>
         </button>
       </form>
 
-      {/* Search History Chips */}
+      {/* Search History Chips (when no active query) */}
       {!hasQuery && searchHistory.length > 0 && (
         <div className="space-y-2 p-3.5 rounded-2xl bg-[#13131c]/60 border border-white/5">
           <div className="flex items-center justify-between">
@@ -306,7 +322,7 @@ export const SearchScreen: React.FC = () => {
             </h3>
             <button
               onClick={handleClearHistory}
-              className="text-xs text-gray-400 hover:text-rose-400 transition-colors flex items-center gap-1"
+              className="text-xs text-gray-400 hover:text-rose-400 transition-colors flex items-center gap-1 cursor-pointer"
             >
               <Trash2 className="w-3 h-3" />
               <span>{isRTL ? 'مسح' : 'Clear'}</span>
@@ -324,7 +340,7 @@ export const SearchScreen: React.FC = () => {
                 </button>
                 <button
                   onClick={() => handleRemoveHistoryItem(item)}
-                  className="text-gray-500 hover:text-white transition-colors"
+                  className="text-gray-500 hover:text-white transition-colors cursor-pointer"
                   aria-label="Remove"
                 >
                   <X className="w-3 h-3" />
@@ -346,21 +362,55 @@ export const SearchScreen: React.FC = () => {
             {isSearchingYouTube && (
               <span className="text-xs text-gray-400 flex items-center gap-1.5">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
-                <span>{isRTL ? 'جاري البحث في يوتيوب...' : 'Searching YouTube...'}</span>
+                <span>{isRTL ? 'جاري جلب النتائج من يوتيوب...' : 'Searching YouTube...'}</span>
               </span>
             )}
           </div>
 
-          {youtubeResults.length === 0 && !isSearchingYouTube ? (
-            <div className="text-center py-12 space-y-2 rounded-2xl bg-[#13131c]/50 border border-white/5">
-              <p className="text-sm text-gray-400">
+          {/* Loading Skeleton while search is actively in progress */}
+          {isSearchingYouTube && youtubeResults.length === 0 && (
+            <div className="space-y-2 animate-pulse">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#13131c] border border-white/5">
+                  <div className="w-14 h-12 rounded-xl bg-white/5" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-white/10 rounded w-3/4" />
+                    <div className="h-3 bg-white/5 rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* No Results Message ONLY when search has actually executed and completed with 0 results */}
+          {!isSearchingYouTube && hasSearched && youtubeResults.length === 0 && (
+            <div className="text-center py-12 space-y-3 rounded-2xl bg-[#13131c]/50 border border-white/5">
+              <div className="w-12 h-12 mx-auto rounded-full bg-white/5 flex items-center justify-center text-gray-400">
+                <Search className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-medium text-gray-300">
                 {isRTL ? 'لم يتم العثور على نتائج، جرب كلمات بحث أخرى' : 'No results found on YouTube, try another keyword'}
               </p>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                {['فيروز', 'عمرو دياب', 'أم كلثوم', 'The Weeknd', 'Taylor Swift'].map((sugKey) => (
+                  <button
+                    key={sugKey}
+                    onClick={() => handleSelectSuggestionAndPlay(sugKey)}
+                    className="px-3 py-1 rounded-full bg-white/5 hover:bg-purple-600/20 border border-white/10 text-xs text-purple-300 cursor-pointer"
+                  >
+                    {sugKey}
+                  </button>
+                ))}
+              </div>
             </div>
-          ) : (
+          )}
+
+          {/* Results List */}
+          {youtubeResults.length > 0 && (
             <div className="space-y-2">
               {youtubeResults.map((song) => {
-                const isCurrent = currentSong?.provider_track_id === song.provider_track_id || currentSong?.id === song.id;
+                const isCurrent =
+                  currentSong?.provider_track_id === song.provider_track_id || currentSong?.id === song.id;
                 const isSongPlaying = isCurrent && isPlaying;
                 const isFav = isFavorite(song.id);
 
@@ -413,7 +463,7 @@ export const SearchScreen: React.FC = () => {
                       </span>
                       <button
                         onClick={() => toggleFavorite(song.id)}
-                        className={`p-2 rounded-full ${
+                        className={`p-2 rounded-full cursor-pointer ${
                           isFav ? 'text-pink-500' : 'text-gray-400 hover:text-white'
                         }`}
                         aria-label="Favorite"
@@ -422,7 +472,7 @@ export const SearchScreen: React.FC = () => {
                       </button>
                       <button
                         onClick={() => openAddToPlaylist(song)}
-                        className="p-2 text-gray-400 hover:text-purple-300"
+                        className="p-2 text-gray-400 hover:text-purple-300 cursor-pointer"
                         aria-label="Add to playlist"
                       >
                         <PlusCircle className="w-4 h-4" />
@@ -442,7 +492,7 @@ export const SearchScreen: React.FC = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
-              <span>{isRTL ? 'الأكثر استماعاً على يوتيوب' : 'Trending on YouTube'}</span>
+              <span>{isRTL ? 'الأكثر استماعاً ورواجاً على يوتيوب' : 'Trending on YouTube'}</span>
             </h3>
             <span className="text-xs text-gray-400 font-medium">
               {isRTL ? `${allSongs.length} أغنية جاهزة للتشغيل` : `${allSongs.length} songs ready`}
@@ -504,7 +554,7 @@ export const SearchScreen: React.FC = () => {
                     </span>
                     <button
                       onClick={() => toggleFavorite(song.id)}
-                      className={`p-2 rounded-full ${
+                      className={`p-2 rounded-full cursor-pointer ${
                         isFav ? 'text-pink-500' : 'text-gray-400 hover:text-white'
                       }`}
                       aria-label="Favorite"
@@ -513,7 +563,7 @@ export const SearchScreen: React.FC = () => {
                     </button>
                     <button
                       onClick={() => openAddToPlaylist(song)}
-                      className="p-2 text-gray-400 hover:text-purple-300"
+                      className="p-2 text-gray-400 hover:text-purple-300 cursor-pointer"
                       aria-label="Add to playlist"
                     >
                       <PlusCircle className="w-4 h-4" />

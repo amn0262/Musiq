@@ -41,14 +41,18 @@ export function matchesQuery(target: string, query: string): boolean {
   const normQuery = normalizeArabic(query.trim());
   const normTarget = normalizeArabic(target.trim());
 
-  // Direct substring match after normalization
-  if (normTarget.includes(normQuery)) return true;
+  // Direct substring match either way
+  if (normTarget.includes(normQuery) || normQuery.includes(normTarget)) return true;
 
-  // Split query into words to check all words present
-  const words = normQuery.split(' ').filter(Boolean);
-  if (words.length > 1) {
-    return words.every((word) => normTarget.includes(word));
-  }
+  // Split query into words to check for meaningful word overlaps
+  const queryWords = normQuery.split(' ').filter((w) => w.length >= 2);
+  const targetWords = normTarget.split(' ').filter((w) => w.length >= 2);
+
+  // If any major query word (e.g. artist or song name) is in target
+  if (queryWords.some((qw) => normTarget.includes(qw))) return true;
+
+  // If any target word is in query
+  if (targetWords.some((tw) => normQuery.includes(tw))) return true;
 
   return false;
 }
