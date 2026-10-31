@@ -3,12 +3,12 @@ import { useMusic, TabType } from '../context/MusicContext';
 import { Search, ListMusic, Heart } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
-  const { activeTab, setActiveTab, isRTL } = useMusic();
+  const { activeTab, setActiveTab } = useMusic();
 
-  const tabs: { id: TabType; labelAr: string; labelEn: string; icon: React.ElementType }[] = [
-    { id: 'search', labelAr: 'البحث ويوتيوب', labelEn: 'Search & YouTube', icon: Search },
-    { id: 'playlists', labelAr: 'قوائم التشغيل', labelEn: 'Playlists', icon: ListMusic },
-    { id: 'library', labelAr: 'المفضلة', labelEn: 'Favorites', icon: Heart },
+  const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
+    { id: 'search', label: 'Search', icon: Search },
+    { id: 'playlists', label: 'Playlists', icon: ListMusic },
+    { id: 'library', label: 'Favorites', icon: Heart },
   ];
 
   return (
@@ -33,7 +33,7 @@ export const BottomNav: React.FC = () => {
             >
               <Icon className="w-5 h-5" />
               <span className="text-[11px] mt-1 font-medium">
-                {isRTL ? tab.labelAr : tab.labelEn}
+                {tab.label}
               </span>
             </button>
           );

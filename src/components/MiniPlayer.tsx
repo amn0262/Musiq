@@ -14,7 +14,6 @@ export const MiniPlayer: React.FC = () => {
     openFullScreenPlayer,
     isFavorite,
     toggleFavorite,
-    isRTL,
   } = useMusic();
 
   if (!currentSong) return null;
@@ -35,13 +34,12 @@ export const MiniPlayer: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-between p-2.5 sm:p-3 gap-2 sm:gap-4">
-            {/* Song Info -> Opens Full Player (No Thumbnail Image) */}
+            {/* Song Info -> Opens Full Player */}
             <button
               onClick={openFullScreenPlayer}
               className="flex items-center gap-3 min-w-0 text-left flex-1 group cursor-pointer"
               aria-label="Open Full Player"
             >
-              {/* Minimal Audio Icon Box instead of Image */}
               <div
                 className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 border transition-colors ${
                   isPlaying
@@ -53,23 +51,17 @@ export const MiniPlayer: React.FC = () => {
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-semibold text-white truncate group-hover:text-gray-300 transition-colors">
-                    {isRTL && currentSong.titleAr ? currentSong.titleAr : currentSong.title}
-                  </h4>
-                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-white/10 text-gray-300 flex-shrink-0">
-                    {isRTL ? 'يوتيوب' : 'YouTube'}
-                  </span>
-                </div>
+                <h4 className="text-sm font-semibold text-white truncate group-hover:text-gray-300 transition-colors">
+                  {currentSong.title}
+                </h4>
                 <p className="text-xs text-gray-400 truncate mt-0.5">
-                  {isRTL && currentSong.artistAr ? currentSong.artistAr : currentSong.artist}
+                  {currentSong.artist}
                 </p>
               </div>
             </button>
 
             {/* Controls */}
             <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
-              {/* Favorite Button */}
               <button
                 onClick={() => toggleFavorite(currentSong.id)}
                 className={`p-2 rounded-lg transition-colors cursor-pointer ${
@@ -80,7 +72,6 @@ export const MiniPlayer: React.FC = () => {
                 <Heart className={`w-4 h-4 ${isFav ? 'fill-white' : ''}`} />
               </button>
 
-              {/* Prev Track */}
               <button
                 onClick={prevTrack}
                 className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer hidden xs:block"
@@ -89,7 +80,6 @@ export const MiniPlayer: React.FC = () => {
                 <SkipBack className="w-4 h-4" />
               </button>
 
-              {/* Play / Pause Button */}
               <button
                 onClick={togglePlayPause}
                 className="w-9 h-9 rounded-lg bg-white text-black hover:bg-gray-200 flex items-center justify-center font-bold transition-transform active:scale-95 cursor-pointer shadow"
@@ -102,7 +92,6 @@ export const MiniPlayer: React.FC = () => {
                 )}
               </button>
 
-              {/* Next Track */}
               <button
                 onClick={nextTrack}
                 className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer"
@@ -111,7 +100,6 @@ export const MiniPlayer: React.FC = () => {
                 <SkipForward className="w-4 h-4" />
               </button>
 
-              {/* Open Full Player */}
               <button
                 onClick={openFullScreenPlayer}
                 className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer hidden sm:block"

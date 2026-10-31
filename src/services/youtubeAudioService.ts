@@ -244,6 +244,17 @@ class YouTubeAudioService {
       this.compressorNode.connect(this.masterGain);
       this.masterGain.connect(this.audioCtx.destination);
 
+      // Keepalive Sub-Audible Carrier (1Hz @ 0.00005 Gain) to preserve iOS/Android lock screen audio focus
+      try {
+        const keepaliveOsc = this.audioCtx.createOscillator();
+        const keepaliveGain = this.audioCtx.createGain();
+        keepaliveOsc.frequency.setValueAtTime(1, this.audioCtx.currentTime);
+        keepaliveGain.gain.setValueAtTime(0.00005, this.audioCtx.currentTime);
+        keepaliveOsc.connect(keepaliveGain);
+        keepaliveGain.connect(this.audioCtx.destination);
+        keepaliveOsc.start();
+      } catch {}
+
       this.applySoundPreset(this.soundPreset);
     } catch (e) {
       console.warn('Web Audio enhancer initialization notice:', e);
@@ -678,14 +689,12 @@ class YouTubeAudioService {
 
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: song.titleAr ? `${song.title} (${song.titleAr})` : song.title,
-        artist: song.artistAr ? `${song.artist} (${song.artistAr})` : song.artist,
-        album: song.album || 'MUSIQ YouTube Stream',
+        title: song.title,
+        artist: song.artist,
+        album: song.album || 'MUSIQ',
         artwork: [
-          { src: song.artwork_url, sizes: '96x96', type: 'image/jpeg' },
-          { src: song.artwork_url, sizes: '128x128', type: 'image/jpeg' },
-          { src: song.artwork_url, sizes: '256x256', type: 'image/jpeg' },
-          { src: song.artwork_url, sizes: '512x512', type: 'image/jpeg' },
+          { src: song.artwork_url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect fill="%2314141c" width="96" height="96"/></svg>', sizes: '96x96', type: 'image/jpeg' },
+          { src: song.artwork_url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect fill="%2314141c" width="256" height="256"/></svg>', sizes: '256x256', type: 'image/jpeg' },
         ],
       });
     } catch (e) {

@@ -29,8 +29,6 @@ export const LibraryScreen: React.FC = () => {
     clearHistory,
     setActiveTab,
     openAddToPlaylist,
-    isRTL,
-    t,
   } = useMusic();
 
   const [activeSubTab, setActiveSubTab] = useState<LibraryTab>('favorites');
@@ -47,17 +45,17 @@ export const LibraryScreen: React.FC = () => {
     }
   };
 
-  const tabs: { id: LibraryTab; labelKey: string; count: number; icon: React.ElementType }[] = [
-    { id: 'favorites', labelKey: 'library_favorites', count: favoriteSongs.length, icon: Heart },
-    { id: 'playlists', labelKey: 'nav_playlists', count: playlists.length, icon: ListMusic },
-    { id: 'history', labelKey: 'library_history', count: recentlyPlayed.length, icon: History },
+  const tabs: { id: LibraryTab; label: string; count: number; icon: React.ElementType }[] = [
+    { id: 'favorites', label: 'Favorites', count: favoriteSongs.length, icon: Heart },
+    { id: 'playlists', label: 'Playlists', count: playlists.length, icon: ListMusic },
+    { id: 'history', label: 'History', count: recentlyPlayed.length, icon: History },
   ];
 
   return (
     <div className="space-y-4 pb-32">
       {/* Header */}
       <div>
-        <h1 className="text-lg sm:text-xl font-bold text-white">{t('library_title')}</h1>
+        <h1 className="text-lg sm:text-xl font-bold text-white">Library</h1>
       </div>
 
       {/* Sub Tabs */}
@@ -77,7 +75,7 @@ export const LibraryScreen: React.FC = () => {
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
-              <span>{t(tab.labelKey)}</span>
+              <span>{tab.label}</span>
               <span className={`text-[10px] px-1.5 py-0.2 rounded ${isActive ? 'bg-black/10' : 'bg-white/10'}`}>
                 {tab.count}
               </span>
@@ -86,19 +84,14 @@ export const LibraryScreen: React.FC = () => {
         })}
       </div>
 
-      {/* Tab 1: Favorite Songs (No Images) */}
+      {/* Tab 1: Favorite Songs */}
       {activeSubTab === 'favorites' && (
         <div className="space-y-1.5">
           {favoriteSongs.length === 0 ? (
             <div className="text-center py-14 bg-[#121217] rounded-xl border border-[#22222e] space-y-2">
               <Heart className="w-8 h-8 text-gray-600 mx-auto" />
-              <p className="text-sm font-semibold text-gray-300">
-                {isRTL ? 'لم تقم بإضافة أي أغاني للمفضلة بعد' : 'No favorite songs added yet'}
-              </p>
-              <p className="text-xs text-gray-500">
-                {isRTL
-                  ? 'اضغط على رمز القلب عند الاستماع لأي أغنية لحفظها هنا'
-                  : 'Tap the heart icon while playing any song to save it here.'}
+              <p className="text-sm font-semibold text-gray-400">
+                No favorites yet
               </p>
             </div>
           ) : (
@@ -134,10 +127,10 @@ export const LibraryScreen: React.FC = () => {
 
                     <div className="min-w-0 flex-1">
                       <p className={`text-sm font-semibold truncate ${isCurrent ? 'text-white font-bold' : 'text-gray-200'}`}>
-                        {isRTL && song.titleAr ? song.titleAr : song.title}
+                        {song.title}
                       </p>
                       <p className="text-xs text-gray-400 truncate mt-0.5">
-                        {isRTL && song.artistAr ? song.artistAr : song.artist}
+                        {song.artist}
                       </p>
                     </div>
                   </button>
@@ -169,7 +162,7 @@ export const LibraryScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 2: Playlists Quick Jump (No Images) */}
+      {/* Tab 2: Playlists Quick Jump */}
       {activeSubTab === 'playlists' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {playlists.map((pl) => (
@@ -184,7 +177,7 @@ export const LibraryScreen: React.FC = () => {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-white truncate">{pl.name}</p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {pl.song_ids.length} {t('playlist_songs_count')}
+                  {pl.song_ids.length} songs
                 </p>
               </div>
             </div>
@@ -192,12 +185,12 @@ export const LibraryScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 3: Listening History (No Images) */}
+      {/* Tab 3: Listening History */}
       {activeSubTab === 'history' && (
         <div className="space-y-2">
           <div className="flex items-center justify-between pb-1">
             <p className="text-xs text-gray-400">
-              {recentlyPlayed.length} {isRTL ? 'أغاني تم الاستماع لها مؤخراً' : 'recently played songs'}
+              {recentlyPlayed.length} tracks
             </p>
             {recentlyPlayed.length > 0 && (
               <button
@@ -205,7 +198,7 @@ export const LibraryScreen: React.FC = () => {
                 className="text-xs font-semibold text-gray-400 hover:text-white flex items-center gap-1 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>{isRTL ? 'مسح سجل الاستماع' : 'Clear History'}</span>
+                <span>Clear History</span>
               </button>
             )}
           </div>
@@ -225,10 +218,10 @@ export const LibraryScreen: React.FC = () => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-white truncate">
-                      {isRTL && song.titleAr ? song.titleAr : song.title}
+                      {song.title}
                     </p>
                     <p className="text-xs text-gray-400 truncate mt-0.5">
-                      {isRTL && song.artistAr ? song.artistAr : song.artist}
+                      {song.artist}
                     </p>
                   </div>
                 </button>

@@ -10,8 +10,6 @@ export const AddToPlaylistModal: React.FC = () => {
     playlists,
     addSongToPlaylist,
     createPlaylist,
-    isRTL,
-    t,
   } = useMusic();
 
   const [newPlaylistName, setNewPlaylistName] = useState('');
@@ -22,7 +20,7 @@ export const AddToPlaylistModal: React.FC = () => {
   const handleAddToPlaylist = (playlistId: string) => {
     const res = addSongToPlaylist(playlistId, songForPlaylistModal.id);
     if (res.success) {
-      setFeedback(isRTL ? 'تمت إضافة الأغنية بنجاح!' : 'Song added to playlist!');
+      setFeedback('Song added to playlist');
       setTimeout(() => {
         setFeedback(null);
         closeAddToPlaylist();
@@ -40,7 +38,7 @@ export const AddToPlaylistModal: React.FC = () => {
     const newPl = createPlaylist(newPlaylistName.trim());
     addSongToPlaylist(newPl.id, songForPlaylistModal.id);
     setNewPlaylistName('');
-    setFeedback(isRTL ? 'تم إنشاء القائمة وإضافة الأغنية!' : 'Playlist created and song added!');
+    setFeedback('Playlist created and song added');
     setTimeout(() => {
       setFeedback(null);
       closeAddToPlaylist();
@@ -64,7 +62,7 @@ export const AddToPlaylistModal: React.FC = () => {
         </button>
 
         <h3 className="text-base font-bold text-white mb-3">
-          {t('player_add_playlist')}
+          Add to Playlist
         </h3>
 
         {/* Selected Song Preview without image */}
@@ -74,14 +72,10 @@ export const AddToPlaylistModal: React.FC = () => {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold truncate">
-              {isRTL && songForPlaylistModal.titleAr
-                ? songForPlaylistModal.titleAr
-                : songForPlaylistModal.title}
+              {songForPlaylistModal.title}
             </p>
             <p className="text-xs text-gray-400 truncate">
-              {isRTL && songForPlaylistModal.artistAr
-                ? songForPlaylistModal.artistAr
-                : songForPlaylistModal.artist}
+              {songForPlaylistModal.artist}
             </p>
           </div>
         </div>
@@ -96,7 +90,7 @@ export const AddToPlaylistModal: React.FC = () => {
         <form onSubmit={handleCreateAndAdd} className="flex gap-2 mb-4">
           <input
             type="text"
-            placeholder={isRTL ? 'اسم قائمة تشغيل جديدة...' : 'New playlist name...'}
+            placeholder="New playlist name..."
             value={newPlaylistName}
             onChange={(e) => setNewPlaylistName(e.target.value)}
             className="flex-1 bg-[#0e0e13] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-gray-400 transition-colors"
@@ -107,7 +101,7 @@ export const AddToPlaylistModal: React.FC = () => {
             className="px-3.5 py-2 rounded-xl bg-white text-black hover:bg-gray-200 disabled:opacity-40 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>{isRTL ? 'إنشاء' : 'Create'}</span>
+            <span>Create</span>
           </button>
         </form>
 
@@ -133,7 +127,7 @@ export const AddToPlaylistModal: React.FC = () => {
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-white truncate">{pl.name}</p>
                     <p className="text-xs text-gray-400">
-                      {pl.song_ids.length} {t('playlist_songs_count')}
+                      {pl.song_ids.length} songs
                     </p>
                   </div>
                 </div>
@@ -142,11 +136,11 @@ export const AddToPlaylistModal: React.FC = () => {
                   {isAlreadyAdded ? (
                     <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
                       <Check className="w-3.5 h-3.5" />
-                      <span>{isRTL ? 'مضافة' : 'Added'}</span>
+                      <span>Added</span>
                     </span>
                   ) : (
                     <span className="text-xs font-bold text-gray-300 bg-white/10 px-2 py-0.5 rounded">
-                      {isRTL ? 'إضافة' : 'Add'}
+                      Add
                     </span>
                   )}
                 </div>

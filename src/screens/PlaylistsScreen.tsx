@@ -27,8 +27,6 @@ export const PlaylistsScreen: React.FC = () => {
     reorderPlaylistSong,
     playSong,
     findSongById,
-    isRTL,
-    t,
   } = useMusic();
 
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
@@ -92,8 +90,8 @@ export const PlaylistsScreen: React.FC = () => {
           onClick={() => setSelectedPlaylistId(null)}
           className="inline-flex items-center gap-2 text-xs font-semibold text-gray-400 hover:text-white transition-colors cursor-pointer"
         >
-          <ArrowLeft className="w-4 h-4 rtl:rotate-180" />
-          <span>{isRTL ? 'الرجوع للقوائم' : 'Back to Playlists'}</span>
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Playlists</span>
         </button>
 
         {/* Playlist Header (No Images) */}
@@ -141,7 +139,7 @@ export const PlaylistsScreen: React.FC = () => {
             )}
 
             <p className="text-xs text-gray-500 font-mono">
-              {playlistSongs.length} {t('playlist_songs_count')} • {formatDuration(totalDuration)}
+              {playlistSongs.length} songs • {formatDuration(totalDuration)}
             </p>
 
             {/* Play & Shuffle Action Buttons */}
@@ -152,7 +150,7 @@ export const PlaylistsScreen: React.FC = () => {
                 className="px-4 py-1.5 rounded-lg bg-white text-black hover:bg-gray-200 disabled:opacity-40 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Play className="w-3.5 h-3.5 fill-black" />
-                <span>{t('playlist_play_all')}</span>
+                <span>Play All</span>
               </button>
 
               <button
@@ -161,7 +159,7 @@ export const PlaylistsScreen: React.FC = () => {
                 className="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-40 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Shuffle className="w-3.5 h-3.5" />
-                <span>{t('playlist_shuffle')}</span>
+                <span>Shuffle</span>
               </button>
 
               <button
@@ -184,7 +182,7 @@ export const PlaylistsScreen: React.FC = () => {
           {playlistSongs.length === 0 ? (
             <div className="text-center py-12 bg-[#121217] rounded-xl border border-[#22222e] space-y-1.5">
               <Music className="w-8 h-8 text-gray-600 mx-auto" />
-              <p className="text-xs text-gray-400">{t('playlist_empty')}</p>
+              <p className="text-xs text-gray-400">Playlist is empty</p>
             </div>
           ) : (
             playlistSongs.map((song, index) => {
@@ -205,10 +203,10 @@ export const PlaylistsScreen: React.FC = () => {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-white truncate">
-                        {isRTL && song.titleAr ? song.titleAr : song.title}
+                        {song.title}
                       </p>
                       <p className="text-xs text-gray-400 truncate mt-0.5">
-                        {isRTL && song.artistAr ? song.artistAr : song.artist}
+                        {song.artist}
                       </p>
                     </div>
                   </button>
@@ -268,9 +266,9 @@ export const PlaylistsScreen: React.FC = () => {
     <div className="space-y-4 pb-32">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg sm:text-xl font-bold text-white">{t('playlists_title')}</h1>
+          <h1 className="text-lg sm:text-xl font-bold text-white">Playlists</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            {playlists.length} {isRTL ? 'قوائم تشغيل' : 'playlists'}
+            {playlists.length} playlists
           </p>
         </div>
 
@@ -279,7 +277,7 @@ export const PlaylistsScreen: React.FC = () => {
           className="px-3.5 py-1.5 rounded-lg bg-white text-black hover:bg-gray-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>{t('playlist_create_new')}</span>
+          <span>New Playlist</span>
         </button>
       </div>
 
@@ -290,7 +288,7 @@ export const PlaylistsScreen: React.FC = () => {
           className="p-4 rounded-xl bg-[#14141c] border border-[#242434] space-y-3 animate-in fade-in"
         >
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white">{t('playlist_create_new')}</h3>
+            <h3 className="text-sm font-bold text-white">New Playlist</h3>
             <button
               type="button"
               onClick={() => setIsCreatingNew(false)}
@@ -302,13 +300,13 @@ export const PlaylistsScreen: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-300">
-              {t('playlist_name_label')}
+              Name
             </label>
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. My Favorites"
+              placeholder="e.g. Chill Vibes"
               className="w-full bg-[#0c0c10] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-400"
               autoFocus
             />
@@ -316,13 +314,13 @@ export const PlaylistsScreen: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-300">
-              {t('playlist_desc_label')}
+              Description
             </label>
             <input
               type="text"
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
-              placeholder="Optional description"
+              placeholder="Optional"
               className="w-full bg-[#0c0c10] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-400"
             />
           </div>
@@ -340,30 +338,25 @@ export const PlaylistsScreen: React.FC = () => {
               disabled={!newName.trim()}
               className="px-4 py-1.5 rounded-lg bg-white text-black hover:bg-gray-200 disabled:opacity-40 text-xs font-bold cursor-pointer"
             >
-              {t('playlist_save')}
+              Save
             </button>
           </div>
         </form>
       )}
 
-      {/* Grid of Playlists (No Images) */}
+      {/* Grid of Playlists */}
       {playlists.length === 0 ? (
         <div className="py-14 px-4 text-center rounded-xl bg-[#121217] border border-[#22222e] space-y-3 max-w-md mx-auto">
           <ListMusic className="w-8 h-8 text-gray-500 mx-auto" />
-          <div className="space-y-1">
-            <h3 className="text-sm font-bold text-white">
-              {isRTL ? 'قوائم التشغيل فارغة' : 'Playlists are empty'}
-            </h3>
-            <p className="text-xs text-gray-400">
-              {isRTL ? 'أنشئ قوائمك الموسيقية وأضف إليها أي أغنية من البحث.' : 'Create playlists and add any track from YouTube search.'}
-            </p>
-          </div>
+          <h3 className="text-sm font-bold text-white">
+            No playlists yet
+          </h3>
           <button
             onClick={() => setIsCreatingNew(true)}
             className="px-4 py-2 rounded-lg bg-white text-black hover:bg-gray-200 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>{isRTL ? 'إنشاء أول قائمة' : 'Create First Playlist'}</span>
+            <span>Create Playlist</span>
           </button>
         </div>
       ) : (
@@ -383,7 +376,7 @@ export const PlaylistsScreen: React.FC = () => {
                   {pl.name}
                 </h3>
                 <p className="text-xs text-gray-400 truncate mt-0.5">
-                  {pl.song_ids.length} {t('playlist_songs_count')}
+                  {pl.song_ids.length} songs
                 </p>
               </div>
             </div>

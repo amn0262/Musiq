@@ -18,7 +18,6 @@ import {
   PlusCircle,
   Music,
   Trash2,
-  Lock,
 } from 'lucide-react';
 
 export const FullScreenPlayer: React.FC = () => {
@@ -46,7 +45,6 @@ export const FullScreenPlayer: React.FC = () => {
     queueIndex,
     playSong,
     removeFromQueue,
-    isRTL,
     t,
   } = useMusic();
 
@@ -90,26 +88,22 @@ export const FullScreenPlayer: React.FC = () => {
 
         <div className="text-center">
           <p className="text-[11px] font-bold tracking-wider uppercase text-gray-400">
-            {t('player_playing')}
+            Now Playing
           </p>
           <p className="text-xs text-gray-300 font-medium truncate max-w-[200px] sm:max-w-xs">
-            {currentSong.album || 'YouTube Audio'}
+            {currentSong.album || 'Single'}
           </p>
         </div>
 
-        {/* Lock Screen Status Badge */}
-        <div className="flex items-center gap-1.5 bg-[#161622] px-3 py-1 rounded-lg border border-[#2a2a3c] text-xs font-medium text-gray-300">
-          <Lock className="w-3 h-3 text-emerald-400" />
-          <span className="hidden sm:inline">{isRTL ? 'قفل الشاشة مفعّل' : 'Lock-Screen Active'}</span>
-        </div>
+        <div className="w-6" />
       </div>
 
       {/* Main Center Content (Tabs: Audio Visualizer, Lyrics, Queue) */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-4 overflow-y-auto no-scrollbar">
-        {/* Tab 1: Minimalist Audio Display (No Image) */}
+        {/* Tab 1: Minimalist Audio Display */}
         {activeTab === 'cover' && (
           <div className="w-full max-w-sm sm:max-w-md flex flex-col items-center">
-            {/* Sleek Audio Waveform Visualizer Box */}
+            {/* Sleek Audio Waveform Box */}
             <div className="w-60 h-60 sm:w-72 sm:h-72 rounded-2xl bg-[#13131c] border border-[#222230] p-6 flex flex-col items-center justify-center shadow-xl my-4">
               <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 text-gray-300">
                 <Music className="w-8 h-8" />
@@ -132,26 +126,16 @@ export const FullScreenPlayer: React.FC = () => {
                   />
                 ))}
               </div>
-
-              <span className="text-[11px] font-mono text-gray-400 mt-4">
-                {isRTL ? 'صوت يوتيوب عالي النقاء' : 'YouTube Pure Audio'}
-              </span>
             </div>
 
             {/* Song Meta Title & Artist */}
-            <div className="w-full text-center mt-2">
+            <div className="w-full text-center mt-3">
               <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight truncate px-2">
-                {isRTL && currentSong.titleAr ? currentSong.titleAr : currentSong.title}
+                {currentSong.title}
               </h2>
               <p className="text-sm text-gray-400 font-medium mt-1 truncate">
-                {isRTL && currentSong.artistAr ? currentSong.artistAr : currentSong.artist}
+                {currentSong.artist}
               </p>
-
-              {/* Lock-Screen Playback Active Pill */}
-              <div className="flex items-center justify-center gap-1.5 mt-3 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full w-fit mx-auto">
-                <Lock className="w-3 h-3 text-emerald-400" />
-                <span>{isRTL ? 'يتابع التشغيل عند قفل شاشة الموبايل' : 'Plays continuously on screen lock'}</span>
-              </div>
             </div>
           </div>
         )}
@@ -160,36 +144,36 @@ export const FullScreenPlayer: React.FC = () => {
         {activeTab === 'lyrics' && (
           <div className="w-full max-w-lg h-72 sm:h-96 overflow-y-auto no-scrollbar p-6 bg-[#13131c] rounded-2xl border border-[#222230] text-center flex flex-col justify-center">
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
-              {t('player_lyrics')}
+              Lyrics
             </h3>
-            {currentSong.lyricsAr && (
-              <div className="mb-4 space-y-2 text-base sm:text-lg font-semibold text-gray-200 leading-relaxed">
-                {currentSong.lyricsAr.split('\n').map((line, idx) => (
+            {currentSong.lyrics && (
+              <div className="space-y-1.5 text-sm sm:text-base text-gray-300">
+                {currentSong.lyrics.split('\n').map((line, idx) => (
                   <p key={idx}>{line}</p>
                 ))}
               </div>
             )}
-            {currentSong.lyrics && (
-              <div className="space-y-1 text-sm text-gray-400">
-                {currentSong.lyrics.split('\n').map((line, idx) => (
+            {currentSong.lyricsAr && !currentSong.lyrics && (
+              <div className="space-y-1.5 text-sm sm:text-base text-gray-300">
+                {currentSong.lyricsAr.split('\n').map((line, idx) => (
                   <p key={idx}>{line}</p>
                 ))}
               </div>
             )}
             {!currentSong.lyrics && !currentSong.lyricsAr && (
               <p className="text-gray-500 text-sm">
-                {isRTL ? 'كلمات الأغنية غير متوفرة' : 'Lyrics are not available.'}
+                No lyrics available
               </p>
             )}
           </div>
         )}
 
-        {/* Tab 3: Queue Drawer (No Images) */}
+        {/* Tab 3: Queue Drawer */}
         {activeTab === 'queue' && (
           <div className="w-full max-w-lg h-72 sm:h-96 overflow-y-auto no-scrollbar p-4 bg-[#13131c] rounded-2xl border border-[#222230] flex flex-col">
             <div className="flex items-center justify-between pb-2 border-b border-[#222230] mb-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                {t('player_queue')} ({queue.length})
+                Up Next ({queue.length})
               </h3>
             </div>
 
@@ -214,10 +198,10 @@ export const FullScreenPlayer: React.FC = () => {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className={`text-sm truncate ${isCurrent ? 'font-bold text-white' : ''}`}>
-                          {isRTL && song.titleAr ? song.titleAr : song.title}
+                          {song.title}
                         </p>
                         <p className="text-xs text-gray-400 truncate">
-                          {isRTL && song.artistAr ? song.artistAr : song.artist}
+                          {song.artist}
                         </p>
                       </div>
                     </button>
@@ -320,7 +304,7 @@ export const FullScreenPlayer: React.FC = () => {
           </button>
         </div>
 
-        {/* Auxiliary Controls: Favorite, Add to Playlist, Lyrics, Queue, Volume */}
+        {/* Auxiliary Controls */}
         <div className="flex items-center justify-between pt-3 border-t border-[#1f1f2c] gap-2">
           <button
             onClick={() => toggleFavorite(currentSong.id)}

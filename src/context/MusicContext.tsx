@@ -202,9 +202,9 @@ const TRANSLATIONS: Record<string, { ar: string; en: string }> = {
 
 export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Settings & Localization
-  const [settings, setSettings] = useState<AppSettings>(() => StorageService.getSettings());
+  const [settings, setSettings] = useState<AppSettings>(() => ({ ...StorageService.getSettings(), language: 'en' }));
   const [user, setUser] = useState<UserProfile>(() => StorageService.getUserProfile());
-  const isRTL = settings.language === 'ar';
+  const isRTL = false;
 
   // Navigation
   const [activeTab, setActiveTab] = useState<TabType>('search');
@@ -274,20 +274,19 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [queue, setQueue] = useState<Song[]>(() => (recentSongs.length > 0 ? recentSongs : []));
   const [queueIndex, setQueueIndex] = useState<number>(0);
 
-  // Sync RTL attribute on document
+  // Sync LTR attribute on document
   useEffect(() => {
-    document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
-    document.documentElement.lang = settings.language;
-  }, [isRTL, settings.language]);
+    document.documentElement.dir = 'ltr';
+    document.documentElement.lang = 'en';
+  }, []);
 
-  // Translation helper
+  // Translation helper (English only)
   const t = useCallback(
     (key: string): string => {
       const entry = TRANSLATIONS[key];
-      if (!entry) return key;
-      return settings.language === 'ar' ? entry.ar : entry.en;
+      return entry ? entry.en : key;
     },
-    [settings.language]
+    []
   );
 
   const updateSettings = useCallback((newSettings: Partial<AppSettings>) => {

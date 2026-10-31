@@ -31,7 +31,6 @@ export const SearchScreen: React.FC = () => {
     toggleFavorite,
     openAddToPlaylist,
     clearHistory,
-    isRTL,
   } = useMusic();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -78,7 +77,7 @@ export const SearchScreen: React.FC = () => {
     if (directYtId) {
       const directTrack: Song = {
         id: `yt-direct-${directYtId}`,
-        title: `YouTube Audio Stream (${directYtId})`,
+        title: `YouTube Audio (${directYtId})`,
         artist: 'YouTube',
         album: 'Direct Stream',
         artwork_url: '',
@@ -108,7 +107,6 @@ export const SearchScreen: React.FC = () => {
           playSong(results[0], results);
         }
       } else {
-        // Fallback to recently played matches
         const localMatches = recentlyPlayed.filter(
           (s) =>
             matchesQuery(s.title, q) ||
@@ -139,7 +137,6 @@ export const SearchScreen: React.FC = () => {
     }
   };
 
-  // Debounced search on input change
   const handleInputChange = (val: string) => {
     setSearchQuery(val);
     setShowSuggestions(true);
@@ -156,12 +153,10 @@ export const SearchScreen: React.FC = () => {
       return;
     }
 
-    // Fetch quick suggestions
     SearchService.getRemoteSuggestions(val).then((sug) => {
       setSuggestions(sug);
     });
 
-    // Debounce the live search by 400ms
     searchTimeoutRef.current = setTimeout(() => {
       performSearch(val, false);
     }, 400);
@@ -216,7 +211,7 @@ export const SearchScreen: React.FC = () => {
     <div className="space-y-4 pb-32">
       {/* Search Input Container */}
       <div id="search-bar-container" className="relative">
-        <div className="relative flex items-center bg-[#121217] border border-[#242432] focus-within:border-gray-300 rounded-xl px-3.5 py-3 shadow-md transition-colors">
+        <div className="relative flex items-center bg-[#121217] border border-[#242432] focus-within:border-gray-400 rounded-xl px-3.5 py-3 shadow-md transition-colors">
           <Search className="w-5 h-5 text-gray-400 me-2.5 flex-shrink-0" />
           <input
             type="text"
@@ -226,7 +221,7 @@ export const SearchScreen: React.FC = () => {
               if (suggestions.length > 0) setShowSuggestions(true);
             }}
             onKeyDown={handleKeyDown}
-            placeholder={isRTL ? 'ابحث في يوتيوب عن أي أغنية أو فنان...' : 'Search YouTube for any song or artist...'}
+            placeholder="Search songs, artists, albums..."
             className="w-full bg-transparent text-white placeholder-gray-500 text-sm sm:text-base focus:outline-none"
             autoFocus
           />
@@ -241,7 +236,7 @@ export const SearchScreen: React.FC = () => {
                 setHasSearched(false);
                 setIsSearchingYouTube(false);
               }}
-              className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+              className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
               aria-label="Clear"
             >
               <X className="w-4 h-4" />
@@ -267,7 +262,7 @@ export const SearchScreen: React.FC = () => {
                     <span className="truncate">{sug}</span>
                   </div>
                   <span className="text-xs text-gray-400 bg-white/5 px-2 py-0.5 rounded ms-2 flex-shrink-0">
-                    {isRTL ? 'تشغيل' : 'Play'}
+                    Play
                   </span>
                 </button>
               ))}
@@ -276,7 +271,7 @@ export const SearchScreen: React.FC = () => {
         )}
       </div>
 
-      {/* Direct YouTube Link/ID Quick Stream Input */}
+      {/* Direct YouTube Link/ID Input */}
       <form
         onSubmit={handleDirectLinkSubmit}
         className="flex items-center gap-2 p-2 rounded-xl bg-[#121217] border border-[#242432] focus-within:border-gray-400"
@@ -286,7 +281,7 @@ export const SearchScreen: React.FC = () => {
           type="text"
           value={directLinkInput}
           onChange={(e) => setDirectLinkInput(e.target.value)}
-          placeholder={isRTL ? 'أو الصق رابط يوتيوب مباشر أو معرف المقطع للتشغيل الفوري...' : 'Or paste a YouTube URL / Video ID to stream directly...'}
+          placeholder="Paste YouTube link or ID..."
           className="w-full bg-transparent text-white placeholder-gray-500 text-xs sm:text-sm focus:outline-none px-1"
         />
         <button
@@ -295,24 +290,24 @@ export const SearchScreen: React.FC = () => {
           className="px-3.5 py-1.5 rounded-lg bg-white text-black hover:bg-gray-200 disabled:opacity-30 disabled:pointer-events-none text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer flex-shrink-0"
         >
           <Play className="w-3 h-3 fill-current" />
-          <span>{isRTL ? 'تشغيل' : 'Play'}</span>
+          <span>Play</span>
         </button>
       </form>
 
-      {/* Search History Chips (when no query) */}
+      {/* Search History Chips */}
       {!hasQuery && searchHistory.length > 0 && (
         <div className="space-y-2 p-3 rounded-xl bg-[#121217] border border-[#22222e]">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-semibold text-gray-400 flex items-center gap-1.5">
               <History className="w-3.5 h-3.5 text-gray-400" />
-              <span>{isRTL ? 'سجل البحث' : 'Recent Searches'}</span>
+              <span>Recent Searches</span>
             </h3>
             <button
               onClick={handleClearHistory}
               className="text-xs text-gray-500 hover:text-gray-300 transition-colors flex items-center gap-1 cursor-pointer"
             >
               <Trash2 className="w-3 h-3" />
-              <span>{isRTL ? 'مسح' : 'Clear'}</span>
+              <span>Clear</span>
             </button>
           </div>
 
@@ -338,21 +333,18 @@ export const SearchScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Active YouTube Search Results (All Results, No Images, Simple Colors) */}
+      {/* Search Results */}
       {hasQuery && (
         <div className="space-y-2">
           <div className="flex items-center justify-between pb-1">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-white" />
-              <span>{isRTL ? 'نتائج البحث في يوتيوب' : 'YouTube Search Results'}</span>
-              <span className="text-xs text-gray-500 font-normal">
-                ({youtubeResults.length} {isRTL ? 'نتيجة' : 'results'})
-              </span>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-white" />
+              <span>Search Results</span>
             </h3>
             {isSearchingYouTube && (
               <span className="text-xs text-gray-400 flex items-center gap-1.5">
                 <Loader2 className="w-3 h-3 animate-spin text-gray-300" />
-                <span>{isRTL ? 'جاري البحث...' : 'Searching...'}</span>
+                <span>Searching...</span>
               </span>
             )}
           </div>
@@ -376,16 +368,14 @@ export const SearchScreen: React.FC = () => {
           {!isSearchingYouTube && hasSearched && youtubeResults.length === 0 && (
             <div className="text-center py-12 space-y-2 rounded-xl bg-[#121217] border border-[#22222e]">
               <Search className="w-8 h-8 text-gray-500 mx-auto" />
-              <p className="text-sm text-gray-300">
-                {isRTL ? 'لم يتم العثور على نتائج، جرب كلمات بحث أخرى' : 'No results found on YouTube, try another keyword'}
-              </p>
+              <p className="text-sm text-gray-400">No results found</p>
             </div>
           )}
 
           {/* Results List: Showing ALL results, No Images */}
           {youtubeResults.length > 0 && (
             <div className="space-y-1.5">
-              {youtubeResults.map((song, index) => {
+              {youtubeResults.map((song) => {
                 const isCurrent =
                   currentSong?.provider_track_id === song.provider_track_id || currentSong?.id === song.id;
                 const isSongPlaying = isCurrent && isPlaying;
@@ -404,7 +394,6 @@ export const SearchScreen: React.FC = () => {
                       onClick={() => handleSongPlay(song, youtubeResults)}
                       className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer"
                     >
-                      {/* Audio Icon Box instead of Image */}
                       <div
                         className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 border ${
                           isCurrent
@@ -458,13 +447,13 @@ export const SearchScreen: React.FC = () => {
         </div>
       )}
 
-      {/* When no active search query: Show Recently Played Songs (Most recent at the top!) */}
+      {/* When no query: Show Recently Played (Most recent on top) */}
       {!hasQuery && (
         <div className="space-y-2 pt-1">
           <div className="flex items-center justify-between pb-1">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-gray-400" />
-              <span>{isRTL ? 'الأغاني التي تم تشغيلها مؤخراً' : 'Recently Played Songs'}</span>
+              <span>Recently Played</span>
             </h3>
             {recentlyPlayed.length > 0 && (
               <button
@@ -472,7 +461,7 @@ export const SearchScreen: React.FC = () => {
                 className="text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1 cursor-pointer"
               >
                 <Trash2 className="w-3 h-3" />
-                <span>{isRTL ? 'مسح السجل' : 'Clear'}</span>
+                <span>Clear</span>
               </button>
             )}
           </div>
@@ -480,13 +469,8 @@ export const SearchScreen: React.FC = () => {
           {recentlyPlayed.length === 0 ? (
             <div className="text-center py-16 px-4 rounded-xl bg-[#121217] border border-[#22222e] space-y-2">
               <Music className="w-10 h-10 text-gray-600 mx-auto" />
-              <p className="text-sm font-semibold text-gray-300">
-                {isRTL ? 'لا توجد أغانٍ تم تشغيلها مؤخراً' : 'No recently played songs yet'}
-              </p>
-              <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                {isRTL
-                  ? 'ابحث في يوتيوب في مربع البحث أعلاه أو الصق رابطاً لتشغيل الأغاني مباشرة وسوف تظهر هنا مرتبة حسب آخر أغنية استمعت إليها.'
-                  : 'Search YouTube above or paste a link to start streaming; your recent tracks will appear here with the latest on top.'}
+              <p className="text-sm font-semibold text-gray-400">
+                No recent tracks
               </p>
             </div>
           ) : (
@@ -510,7 +494,6 @@ export const SearchScreen: React.FC = () => {
                       onClick={() => handleSongPlay(song, recentlyPlayed)}
                       className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer"
                     >
-                      {/* Audio Icon Box instead of Image */}
                       <div
                         className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 border ${
                           isCurrent
@@ -528,16 +511,16 @@ export const SearchScreen: React.FC = () => {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className={`text-sm font-semibold truncate ${isCurrent ? 'text-white font-bold' : 'text-gray-200'}`}>
-                            {isRTL && song.titleAr ? song.titleAr : song.title}
+                            {song.title}
                           </p>
                           {index === 0 && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-white/10 text-gray-300 flex-shrink-0">
-                              {isRTL ? 'الأحدث' : 'Latest'}
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-white/10 text-gray-400 flex-shrink-0">
+                              Latest
                             </span>
                           )}
                         </div>
                         <p className="text-xs text-gray-400 truncate mt-0.5">
-                          {isRTL && song.artistAr ? song.artistAr : song.artist}
+                          {song.artist}
                         </p>
                       </div>
                     </button>

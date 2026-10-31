@@ -19,10 +19,10 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  language: 'ar',
+  language: 'en',
   theme: 'dark',
   audioQuality: '320',
-  equalizer: 'tarab_oriental',
+  equalizer: 'flat',
   autoplay: true,
 };
 
@@ -129,7 +129,7 @@ export class StorageService {
     } catch (e) {
       console.warn(e);
     }
-    return ['عمرو دياب', 'Fairuz', 'The Weeknd', 'طرب أصيل', 'Nancy Ajram'];
+    return ['Coldplay', 'Adele', 'The Weeknd', 'Dua Lipa', 'Billie Eilish'];
   }
 
   public static addSearchQuery(query: string): string[] {
@@ -163,7 +163,7 @@ export class StorageService {
   public static getSettings(): AppSettings {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-      if (data) return { ...DEFAULT_SETTINGS, ...JSON.parse(data) };
+      if (data) return { ...DEFAULT_SETTINGS, ...JSON.parse(data), language: 'en' };
     } catch (e) {
       console.warn(e);
     }

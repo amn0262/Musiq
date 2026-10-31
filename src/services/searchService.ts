@@ -51,7 +51,7 @@ export class SearchService {
     // If query is a YouTube link or ID, return quick play suggestion
     const directId = extractYouTubeVideoId(q);
     if (directId) {
-      return [`تشغيل رابط يوتيوب: ${directId}`];
+      return [`Play Video (${directId})`];
     }
 
     try {
@@ -231,10 +231,10 @@ export class SearchService {
       return [
         {
           id: `yt-direct-${directId}`,
-          title: `YouTube Audio Stream (${directId})`,
-          artist: 'YouTube Music Track',
-          album: 'Direct YouTube Stream',
-          artwork_url: `https://i.ytimg.com/vi/${directId}/hqdefault.jpg`,
+          title: `YouTube Audio (${directId})`,
+          artist: 'YouTube',
+          album: 'Direct Stream',
+          artwork_url: '',
           duration: 240,
           category: 'trending',
           source: 'youtube',
@@ -250,7 +250,10 @@ export class SearchService {
       if (res.ok) {
         const data = await res.json();
         if (data.results && Array.isArray(data.results) && data.results.length > 0) {
-          return data.results;
+          return data.results.map((item: any) => ({
+            ...item,
+            artwork_url: '',
+          }));
         }
       }
     } catch (e) {
@@ -265,7 +268,7 @@ export class SearchService {
           (s.titleAr && matchesQuery(s.titleAr, q)) ||
           matchesQuery(s.artist, q) ||
           (s.artistAr && matchesQuery(s.artistAr, q)))
-    );
+    ).map((s) => ({ ...s, artwork_url: '' }));
 
     if (localMatches.length > 0) {
       return localMatches;
@@ -275,14 +278,14 @@ export class SearchService {
     try {
       const suggestions = await this.getRemoteSuggestions(q);
       if (suggestions && suggestions.length > 0) {
-        return suggestions.slice(0, 5).map((sug, idx) => {
+        return suggestions.map((sug, idx) => {
           const fallbackTrack = INITIAL_SONGS[idx % INITIAL_SONGS.length];
           return {
             id: `yt-sug-${idx}-${Date.now()}`,
             title: sug,
-            artist: 'YouTube Music',
-            album: 'YouTube Discovery',
-            artwork_url: fallbackTrack.artwork_url,
+            artist: 'YouTube',
+            album: 'Search Result',
+            artwork_url: '',
             duration: 210,
             category: 'trending',
             source: 'youtube',
