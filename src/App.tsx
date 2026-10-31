@@ -5,56 +5,48 @@ import { BottomNav } from './components/BottomNav';
 import { MiniPlayer } from './components/MiniPlayer';
 import { FullScreenPlayer } from './components/FullScreenPlayer';
 import { AddToPlaylistModal } from './components/AddToPlaylistModal';
-import { SoundEnhancerModal } from './components/SoundEnhancerModal';
-import { OnboardingModal } from './components/OnboardingModal';
-import { HomeScreen } from './screens/HomeScreen';
 import { SearchScreen } from './screens/SearchScreen';
-import { LibraryScreen } from './screens/LibraryScreen';
 import { PlaylistsScreen } from './screens/PlaylistsScreen';
-import { SettingsScreen } from './screens/SettingsScreen';
+import { LibraryScreen } from './screens/LibraryScreen';
 
 const AppContent: React.FC = () => {
-  const { activeTab, isSoundEnhancerOpen, closeSoundEnhancer } = useMusic();
+  const { activeTab } = useMusic();
 
   return (
-    <div className="min-h-screen bg-[#101014] text-[#f3f4f6] flex flex-col font-sans selection:bg-purple-600 selection:text-white">
-      {/* Top Header */}
+    <div className="min-h-screen bg-[#0b0b0f] text-[#f3f4f6] flex flex-col font-sans selection:bg-purple-600 selection:text-white">
+      {/* Sleek Minimal Header */}
       <Header />
 
-      {/* Main View Area */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 pt-5">
-        {activeTab === 'home' && <HomeScreen />}
-        {activeTab === 'search' && <SearchScreen />}
-        {activeTab === 'library' && <LibraryScreen />}
-        {activeTab === 'playlists' && <PlaylistsScreen />}
-        {activeTab === 'settings' && <SettingsScreen />}
+      {/* Main Content: Search Box & YouTube Discovery, Playlists, or Favorites */}
+      <main className="flex-1 w-full max-w-4xl mx-auto px-3 sm:px-6 pt-4">
+        {activeTab === 'playlists' ? (
+          <PlaylistsScreen />
+        ) : activeTab === 'library' ? (
+          <LibraryScreen />
+        ) : (
+          <SearchScreen />
+        )}
       </main>
 
-      {/* Floating Mini Player */}
+      {/* Integrated Music Player: Persistent Floating Mini Player */}
       <MiniPlayer />
 
-      {/* Pinned Bottom Navigation */}
+      {/* Minimal Navigation: Search, Playlists, Favorites */}
       <BottomNav />
 
-      {/* Full-Screen Detailed Player Modal */}
+      {/* Integrated Music Player: Full-Screen Player Modal */}
       <FullScreenPlayer />
 
       {/* Add To Playlist Dialog */}
       <AddToPlaylistModal />
 
-      {/* Sound Enhancer & Lock Screen Audio Modal */}
-      <SoundEnhancerModal isOpen={isSoundEnhancerOpen} onClose={closeSoundEnhancer} />
-
-      {/* First-Launch Welcome Onboarding & Guided App Tour */}
-      <OnboardingModal />
-
-      {/* Persistent Official YouTube Player Anchor for Real Background & Silent Playback */}
+      {/* Official YouTube Audio Stream Engine: Off-screen unthrottled audio decoding */}
       <div
         id="musiq-yt-player-container"
-        className="fixed -top-[9999px] -left-[9999px] w-1 h-1 overflow-hidden pointer-events-none opacity-0"
+        className="fixed -top-[9999px] -left-[9999px] w-[320px] h-[240px] pointer-events-none opacity-100 -z-50"
         aria-hidden="true"
       >
-        <div id="musiq-yt-player" />
+        <div id="musiq-yt-player" className="w-full h-full" />
       </div>
     </div>
   );

@@ -116,73 +116,53 @@ export const FullScreenPlayer: React.FC = () => {
           </p>
         </div>
 
-        {/* Playback Mode Switch: Audio vs Official YouTube Embed */}
-        <div className="flex items-center gap-1 bg-[#171724] p-1 rounded-full border border-white/10">
-          <button
-            onClick={() => setPlaybackMode('audio')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
-              playbackMode === 'audio'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/40'
-                : 'text-gray-400 hover:text-white'
-            }`}
-            title="High-Fidelity Audio Mode"
-          >
-            <Music className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Hi-Fi</span>
-          </button>
-          <button
-            onClick={() => setPlaybackMode('youtube')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
-              playbackMode === 'youtube'
-                ? 'bg-red-600 text-white shadow-md shadow-red-600/40'
-                : 'text-gray-400 hover:text-white'
-            }`}
-            title="Official YouTube Player Mode"
-          >
-            <Tv className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">YouTube</span>
-          </button>
+        {/* Official YouTube Audio Badge */}
+        <div className="flex items-center gap-1.5 bg-[#171724]/90 px-3 py-1 rounded-full border border-red-500/30 text-xs font-semibold text-red-400 shadow-sm">
+          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          <span>{isRTL ? 'صوت يوتيوب رسمي' : 'YouTube Audio'}</span>
         </div>
       </div>
 
       {/* Main Center Content (Tabs: Cover Art, Lyrics, Queue) */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-2 overflow-y-auto no-scrollbar">
-        {/* Tab 1: Cover Artwork or Official YouTube Embed */}
+        {/* Tab 1: Elegant Audio-Only Cover Artwork with Live Sound Waves */}
         {activeTab === 'cover' && (
           <div className="w-full max-w-sm sm:max-w-md flex flex-col items-center">
-            {playbackMode === 'youtube' && currentSong.provider_track_id ? (
-              <div className="w-full aspect-video rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-black my-4">
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${currentSong.provider_track_id}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(
-                    window.location.origin
-                  )}`}
-                  title={currentSong.title}
-                  className="w-full h-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
+            <div className="relative my-4 sm:my-6 group">
+              <div
+                className={`w-64 h-64 sm:w-80 sm:h-80 rounded-3xl overflow-hidden shadow-2xl transition-all duration-500 border border-white/10 ${
+                  isPlaying
+                    ? 'shadow-purple-500/30 ring-2 ring-purple-500/50 scale-100'
+                    : 'shadow-black/60 scale-95 opacity-90'
+                }`}
+              >
+                <img
+                  src={currentSong.artwork_url}
+                  alt={currentSong.title}
+                  className="w-full h-full object-cover"
                 />
-              </div>
-            ) : (
-              <div className="relative my-4 sm:my-6 group">
-                <div
-                  className={`w-64 h-64 sm:w-80 sm:h-80 rounded-3xl overflow-hidden shadow-2xl transition-all duration-500 border border-white/10 ${
-                    isPlaying
-                      ? 'shadow-purple-500/25 ring-2 ring-purple-500/40 scale-100'
-                      : 'shadow-black/60 scale-95 opacity-90'
-                  }`}
-                >
-                  <img
-                    src={currentSong.artwork_url}
-                    alt={currentSong.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                {/* Audio visualizer glow effect */}
+
+                {/* Audio-only equalizer waves overlay */}
                 {isPlaying && (
-                  <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-purple-600/30 via-indigo-600/20 to-cyan-500/30 filter blur-xl -z-10 animate-pulse" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end justify-center pb-4">
+                    <div className="flex items-end gap-1.5 h-6 px-4 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10">
+                      <span className="w-1 bg-red-400 rounded-full animate-bounce [animation-delay:-0.3s] h-5" />
+                      <span className="w-1 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s] h-3" />
+                      <span className="w-1 bg-cyan-400 rounded-full animate-bounce [animation-delay:-0.4s] h-6" />
+                      <span className="w-1 bg-purple-300 rounded-full animate-bounce [animation-delay:-0.2s] h-4" />
+                      <span className="text-[10px] font-bold text-gray-200 ms-1 font-mono">
+                        {isRTL ? 'صوت يوتيوب' : 'YouTube Audio'}
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
-            )}
+
+              {/* Dynamic Theme Glow Behind Album Art */}
+              {isPlaying && (
+                <div className="absolute -inset-2 rounded-3xl bg-gradient-to-r from-purple-600/35 via-cyan-500/25 to-indigo-600/35 filter blur-2xl -z-10 animate-pulse" />
+              )}
+            </div>
 
             {/* Song Meta Title & Artist */}
             <div className="w-full text-center mt-3 sm:mt-4">

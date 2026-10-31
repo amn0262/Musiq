@@ -69,11 +69,10 @@ export const MiniPlayer: React.FC = () => {
                   <h4 className="text-sm sm:text-base font-bold text-white truncate group-hover:text-purple-300 transition-colors">
                     {isRTL && currentSong.titleAr ? currentSong.titleAr : currentSong.title}
                   </h4>
-                  {playbackMode === 'youtube' && (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-red-600/20 text-red-400 border border-red-500/30 flex-shrink-0">
-                      YT
-                    </span>
-                  )}
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-600/20 text-red-400 border border-red-500/30 flex items-center gap-1 flex-shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    <span>{isRTL ? 'يوتيوب' : 'YouTube'}</span>
+                  </span>
                 </div>
                 <p className="text-xs text-gray-400 truncate mt-0.5">
                   {isRTL && currentSong.artistAr ? currentSong.artistAr : currentSong.artist}

@@ -57,7 +57,7 @@ function youtubeApiPlugin(): Plugin {
             }
 
             // Real-time YouTube search parser
-            const ytSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query + ' اغنية music')}`;
+            const ytSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
             const response = await fetch(ytSearchUrl, {
               headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -67,7 +67,7 @@ function youtubeApiPlugin(): Plugin {
 
             if (response.ok) {
               const html = await response.text();
-              const match = html.match(/var ytInitialData = ({.*?});<\/script>/);
+              const match = html.match(/(?:var\s+)?ytInitialData\s*=\s*({.+?});<\/script>/s);
 
               if (match && match[1]) {
                 const parsedData = JSON.parse(match[1]);

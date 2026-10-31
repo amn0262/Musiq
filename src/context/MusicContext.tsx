@@ -12,6 +12,7 @@ import {
   RepeatMode,
 } from '../utils/playlistRules';
 import { youtubeAudioService, SoundEnhancerPreset } from '../services/youtubeAudioService';
+import { detectSongTheme, applyThemeVariables, SongTheme } from '../utils/themeSystem';
 
 export type TabType = 'home' | 'search' | 'library' | 'playlists' | 'settings';
 export type PlaybackEngineMode = 'audio' | 'youtube';
@@ -42,6 +43,9 @@ interface MusicContextType {
   setSoundEnhancerPreset: (preset: SoundEnhancerPreset) => void;
   soundEnhancerEnabled: boolean;
   toggleSoundEnhancer: () => void;
+
+  // Adaptive Visual Theme per Song
+  currentTheme: SongTheme;
 
   // Player State
   currentSong: Song | null;
@@ -203,7 +207,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const isRTL = settings.language === 'ar';
 
   // Navigation
-  const [activeTab, setActiveTab] = useState<TabType>('home');
+  const [activeTab, setActiveTab] = useState<TabType>('search');
   const [isFullScreenPlayerOpen, setIsFullScreenPlayerOpen] = useState(false);
   const [isAddToPlaylistOpen, setIsAddToPlaylistOpen] = useState(false);
   const [songForPlaylistModal, setSongForPlaylistModal] = useState<Song | null>(null);
@@ -301,9 +305,48 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, []);
 
-  // Set up audio engine & YouTube player callbacks
+  // Adaptive Song Theme State
+  const [currentTheme, setCurrentTheme] = useState<SongTheme>(() => detectSongTheme(INITIAL_SONGS[0]));
+
+  // Dynamically update theme colors and CSS variables whenever song changes
   useEffect(() => {
-    // Initialize YouTube IFrame Player
+    if (currentSong) {
+      const detected = detectSongTheme(currentSong);
+      setCurrentTheme(detected);
+      applyThemeVariables(detected);
+    }
+  }, [currentSong]);
+
+  // Refs to always access latest track control functions without stale closure
+  const handleTrackEndedRef = React.useRef<() => void>(() => {});
+  const handleNextTrackRef = React.useRef<() => void>(() => {});
+
+  // Track ended handler
+  const handleTrackEnded = useCallback(() => {
+    if (repeatMode === 'one' && currentSong) {
+      youtubeAudioService.seek(0);
+      youtubeAudioService.play();
+      return;
+    }
+    const nextIdx = getNextTrackIndex(queueIndex, queue.length, repeatMode);
+    if (nextIdx >= 0) {
+      setQueueIndex(nextIdx);
+      const nextSong = queue[nextIdx];
+      setCurrentSong(nextSong);
+      youtubeAudioService.loadAndPlay(nextSong, true);
+      const updatedRecent = StorageService.addRecentlyPlayed(nextSong.id);
+      setRecentlyPlayedIds(updatedRecent);
+    } else {
+      setIsPlaying(false);
+    }
+  }, [queue, queueIndex, repeatMode, currentSong]);
+
+  useEffect(() => {
+    handleTrackEndedRef.current = handleTrackEnded;
+  }, [handleTrackEnded]);
+
+  // Set up official YouTube audio engine callbacks
+  useEffect(() => {
     youtubeAudioService.initPlayer('musiq-yt-player', {
       onReady: () => {
         if (currentSong) {
@@ -318,79 +361,19 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setIsPlaying(playing);
       },
       onEnded: () => {
-        handleTrackEnded();
+        handleTrackEndedRef.current();
       },
       onError: (err) => {
-        console.warn('YouTube Player error, falling back to audio engine:', err);
-        if (currentSong) {
-          audioEngine.loadAndPlay(currentSong, isPlaying);
-        }
+        console.warn('YouTube Audio Player error handled:', err);
+        // If an embed restriction occurs on a specific video, smoothly advance to next playable track
+        setTimeout(() => {
+          handleNextTrackRef.current();
+        }, 1000);
       },
-    });
-
-    audioEngine.setCallbacks({
-      onTimeUpdate: (cur, dur) => {
-        if (playbackMode === 'audio' && !isPlaying) {
-          setCurrentTime(cur);
-          setDuration(dur);
-        }
-      },
-      onPlayStateChange: (playing) => {
-        // synchronized
-      },
-      onEnded: () => {
-        handleTrackEnded();
-      },
-    });
+    }, currentSong?.provider_track_id || 'KzJ7XZqp4rc');
   }, []);
 
-  // Update MediaSession lock screen actions for both YouTube and Audio
-  useEffect(() => {
-    const handlers = {
-      onPlay: () => {
-        youtubeAudioService.play();
-        audioEngine.play();
-      },
-      onPause: () => {
-        youtubeAudioService.pause();
-        audioEngine.pause();
-      },
-      onNext: () => nextTrack(),
-      onPrev: () => prevTrack(),
-      onSeek: (seconds: number) => {
-        youtubeAudioService.seek(seconds);
-        audioEngine.seek(seconds);
-      },
-    };
-
-    youtubeAudioService.setMediaSessionHandlers(handlers);
-    audioEngine.setMediaSessionHandlers(handlers);
-  }, [queue, queueIndex, repeatMode]);
-
-  // Track ended handler
-  const handleTrackEnded = useCallback(() => {
-    if (repeatMode === 'one' && currentSong) {
-      youtubeAudioService.seek(0);
-      youtubeAudioService.play();
-      audioEngine.seek(0);
-      audioEngine.play();
-      return;
-    }
-    const nextIdx = getNextTrackIndex(queueIndex, queue.length, repeatMode);
-    if (nextIdx >= 0) {
-      setQueueIndex(nextIdx);
-      const nextSong = queue[nextIdx];
-      setCurrentSong(nextSong);
-      youtubeAudioService.loadAndPlay(nextSong, true);
-      audioEngine.loadAndPlay(nextSong, true);
-      const updatedRecent = StorageService.addRecentlyPlayed(nextSong.id);
-      setRecentlyPlayedIds(updatedRecent);
-    } else {
-      setIsPlaying(false);
-    }
-  }, [queue, queueIndex, repeatMode, currentSong]);
-
-  // Play a song directly, optionally loading a new playlist queue
+  // Play a song directly from YouTube, optionally loading a new playlist queue
   const playSong = useCallback(
     (song: Song, newQueue?: Song[]) => {
       let targetQueue = newQueue || queue;
@@ -405,7 +388,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setQueueIndex(songIdx >= 0 ? songIdx : 0);
       setCurrentSong(song);
 
-      // Add to catalog if not present (e.g. from YouTube search)
+      // Add to catalog if not present (e.g. from YouTube search or direct link)
       setAllSongs((prev) => {
         if (!prev.some((s) => s.id === song.id)) {
           return [song, ...prev];
@@ -417,9 +400,8 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const updatedRecent = StorageService.addRecentlyPlayed(song.id);
       setRecentlyPlayedIds(updatedRecent);
 
-      // Trigger actual YouTube playback and audio fallback
+      // Trigger authentic YouTube audio playback
       youtubeAudioService.loadAndPlay(song, true);
-      audioEngine.loadAndPlay(song, true);
     },
     [queue]
   );
@@ -427,11 +409,9 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const togglePlayPause = useCallback(() => {
     if (isPlaying) {
       youtubeAudioService.pause();
-      audioEngine.pause();
     } else {
       if (currentSong) {
         youtubeAudioService.play();
-        audioEngine.play();
       }
     }
   }, [isPlaying, currentSong]);
@@ -443,7 +423,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setQueueIndex(nextIdx);
       const nextSong = queue[nextIdx];
       setCurrentSong(nextSong);
-      audioEngine.loadAndPlay(nextSong, true);
+      youtubeAudioService.loadAndPlay(nextSong, true);
       const updatedRecent = StorageService.addRecentlyPlayed(nextSong.id);
       setRecentlyPlayedIds(updatedRecent);
     }
@@ -453,29 +433,51 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (queue.length === 0) return;
     const { targetIndex, shouldRewind } = getPrevTrackIndex(queueIndex, queue.length, currentTime);
     if (shouldRewind) {
-      audioEngine.seek(0);
+      youtubeAudioService.seek(0);
+      setCurrentTime(0);
       return;
     }
     if (targetIndex >= 0) {
       setQueueIndex(targetIndex);
       const prevSong = queue[targetIndex];
       setCurrentSong(prevSong);
-      audioEngine.loadAndPlay(prevSong, true);
+      youtubeAudioService.loadAndPlay(prevSong, true);
       const updatedRecent = StorageService.addRecentlyPlayed(prevSong.id);
       setRecentlyPlayedIds(updatedRecent);
     }
   }, [queue, queueIndex, currentTime]);
 
+  useEffect(() => {
+    handleNextTrackRef.current = nextTrack;
+  }, [nextTrack]);
+
+  // Update MediaSession lock screen actions for native background audio
+  useEffect(() => {
+    const handlers = {
+      onPlay: () => {
+        youtubeAudioService.play();
+      },
+      onPause: () => {
+        youtubeAudioService.pause();
+      },
+      onNext: () => nextTrack(),
+      onPrev: () => prevTrack(),
+      onSeek: (seconds: number) => {
+        youtubeAudioService.seek(seconds);
+      },
+    };
+
+    youtubeAudioService.setMediaSessionHandlers(handlers);
+  }, [nextTrack, prevTrack]);
+
   const seekTo = useCallback((seconds: number) => {
     youtubeAudioService.seek(seconds);
-    audioEngine.seek(seconds);
     setCurrentTime(seconds);
   }, []);
 
   const setVolume = useCallback((val: number) => {
     setVolumeState(val);
     youtubeAudioService.setVolume(val);
-    audioEngine.setVolume(val);
   }, []);
 
   const toggleShuffle = useCallback(() => {
@@ -518,10 +520,10 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const nextIdx = Math.min(index, next.length - 1);
           setQueueIndex(nextIdx);
           setCurrentSong(next[nextIdx]);
-          audioEngine.loadAndPlay(next[nextIdx], isPlaying);
+          youtubeAudioService.loadAndPlay(next[nextIdx], isPlaying);
         } else {
           setCurrentSong(null);
-          audioEngine.pause();
+          youtubeAudioService.pause();
         }
       } else if (index < queueIndex) {
         setQueueIndex((i) => i - 1);
@@ -724,6 +726,8 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setSoundEnhancerPreset,
         soundEnhancerEnabled,
         toggleSoundEnhancer,
+
+        currentTheme,
 
         currentSong,
         isPlaying,

@@ -10,26 +10,97 @@ export interface SearchResults {
   youtubeResults?: Song[];
 }
 
+/**
+ * Extracts a YouTube Video ID from any standard YouTube URL or raw ID
+ */
+export function extractYouTubeVideoId(input: string): string | null {
+  const str = input.trim();
+  if (!str) return null;
+
+  // Raw 11-character YouTube video ID
+  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) {
+    return str;
+  }
+
+  // youtu.be/VIDEO_ID
+  const shortMatch = str.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/))([a-zA-Z0-9_-]{11})/i);
+  if (shortMatch && shortMatch[1]) {
+    return shortMatch[1];
+  }
+
+  // youtube.com/watch?v=VIDEO_ID
+  const watchMatch = str.match(/[?&]v=([a-zA-Z0-9_-]{11})/i);
+  if (watchMatch && watchMatch[1]) {
+    return watchMatch[1];
+  }
+
+  return null;
+}
+
 export class SearchService {
+  /**
+   * Fetches real-time suggestions directly from YouTube suggestion JSONP API
+   * Supports Arabic, English, Turkish, and all international queries with zero CORS blocking
+   */
   public static async getRemoteSuggestions(query: string): Promise<string[]> {
     const q = query.trim();
     if (!q) return [];
-    try {
-      const res = await fetch(`/api/youtube/suggestions?q=${encodeURIComponent(q)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.suggestions && Array.isArray(data.suggestions)) {
-          return data.suggestions;
-        }
-      }
-    } catch {
-      // ignore
+
+    if (typeof window === 'undefined') return this.getSuggestions(q);
+
+    // If query is a YouTube link or ID, return quick play suggestion
+    const directId = extractYouTubeVideoId(q);
+    if (directId) {
+      return [`تشغيل رابط يوتيوب: ${directId}`];
     }
-    return this.getSuggestions(q);
+
+    try {
+      const results = await new Promise<string[]>((resolve) => {
+        const callbackName = `yt_suggest_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        const script = document.createElement('script');
+
+        const timeout = setTimeout(() => {
+          cleanup();
+          resolve(SearchService.getSuggestions(q));
+        }, 1200);
+
+        const cleanup = () => {
+          clearTimeout(timeout);
+          delete (window as any)[callbackName];
+          if (script.parentNode) {
+            script.parentNode.removeChild(script);
+          }
+        };
+
+        (window as any)[callbackName] = (data: any) => {
+          cleanup();
+          if (Array.isArray(data) && Array.isArray(data[1])) {
+            const list = data[1].map((item: any) => (Array.isArray(item) ? item[0] : String(item)));
+            resolve(list.slice(0, 7));
+          } else {
+            resolve(SearchService.getSuggestions(q));
+          }
+        };
+
+        script.src = `https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&q=${encodeURIComponent(
+          q
+        )}&jsonp=${callbackName}`;
+        script.onerror = () => {
+          cleanup();
+          resolve(SearchService.getSuggestions(q));
+        };
+
+        document.head.appendChild(script);
+      });
+
+      return results;
+    } catch {
+      return this.getSuggestions(q);
+    }
   }
 
   /**
-   * Generates fast real-time search suggestions while typing
+   * Local suggestions generator from catalog artists & song titles
    */
   public static getSuggestions(query: string, max: number = 6): string[] {
     const q = query.trim();
@@ -37,7 +108,6 @@ export class SearchService {
 
     const suggestions = new Set<string>();
 
-    // Check artists
     for (const art of POPULAR_ARTISTS) {
       if (matchesQuery(art.name, q) || (art.nameAr && matchesQuery(art.nameAr, q))) {
         suggestions.add(art.nameAr || art.name);
@@ -45,7 +115,6 @@ export class SearchService {
       }
     }
 
-    // Check song titles
     for (const song of INITIAL_SONGS) {
       if (matchesQuery(song.title, q) || (song.titleAr && matchesQuery(song.titleAr, q))) {
         suggestions.add(song.titleAr || song.title);
@@ -67,7 +136,26 @@ export class SearchService {
         artists: [],
         albums: [],
         lyricsMatches: [],
+        youtubeResults: [],
       };
+    }
+
+    // Direct YouTube URL or Video ID check
+    const directYtId = extractYouTubeVideoId(q);
+    const directYtResults: Song[] = [];
+    if (directYtId) {
+      directYtResults.push({
+        id: `yt-direct-${directYtId}`,
+        title: `YouTube Audio Stream (${directYtId})`,
+        artist: 'YouTube Music Track',
+        album: 'Direct YouTube Stream',
+        artwork_url: `https://i.ytimg.com/vi/${directYtId}/hqdefault.jpg`,
+        duration: 240,
+        category: 'trending',
+        source: 'youtube',
+        provider_track_id: directYtId,
+        plays_count: 1000000,
+      });
     }
 
     const matchedSongs: Song[] = [];
@@ -78,8 +166,8 @@ export class SearchService {
       const matchTitle = matchesQuery(song.title, q) || (song.titleAr && matchesQuery(song.titleAr, q));
       const matchArtist = matchesQuery(song.artist, q) || (song.artistAr && matchesQuery(song.artistAr, q));
       const matchAlbum = song.album && matchesQuery(song.album, q);
-      const matchLyrics = (song.lyrics && matchesQuery(song.lyrics, q)) || 
-                          (song.lyricsAr && matchesQuery(song.lyricsAr, q));
+      const matchLyrics =
+        (song.lyrics && matchesQuery(song.lyrics, q)) || (song.lyricsAr && matchesQuery(song.lyricsAr, q));
 
       if (matchTitle || matchArtist || matchAlbum) {
         matchedSongs.push(song);
@@ -109,21 +197,54 @@ export class SearchService {
       return matchesQuery(alb.title, q) || matchesQuery(alb.artist, q);
     });
 
+    // Also match YouTube results from all songs that have YouTube video IDs
+    const matchedYouTubeSongs = allSongs.filter(
+      (s) =>
+        s.provider_track_id &&
+        (matchesQuery(s.title, q) ||
+          (s.titleAr && matchesQuery(s.titleAr, q)) ||
+          matchesQuery(s.artist, q) ||
+          (s.artistAr && matchesQuery(s.artistAr, q)))
+    );
+
+    const combinedYt = [...directYtResults, ...matchedYouTubeSongs];
+
     return {
       songs: matchedSongs,
       artists: matchedArtists,
       albums: matchedAlbums,
       lyricsMatches,
+      youtubeResults: combinedYt,
     };
   }
 
   /**
-   * Real-time YouTube search integration via backend API
+   * Real-time YouTube search integration
    */
   public static async searchYouTubeMusic(query: string, apiKey?: string): Promise<Song[]> {
     const q = query.trim();
     if (!q) return [];
 
+    // 1. Direct YouTube Video ID or URL match
+    const directId = extractYouTubeVideoId(q);
+    if (directId) {
+      return [
+        {
+          id: `yt-direct-${directId}`,
+          title: `YouTube Audio Stream (${directId})`,
+          artist: 'YouTube Music Track',
+          album: 'Direct YouTube Stream',
+          artwork_url: `https://i.ytimg.com/vi/${directId}/hqdefault.jpg`,
+          duration: 240,
+          category: 'trending',
+          source: 'youtube',
+          provider_track_id: directId,
+          plays_count: 1000000,
+        },
+      ];
+    }
+
+    // 2. Fetch real live YouTube search results from /api/youtube/search
     try {
       const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(q)}`);
       if (res.ok) {
@@ -133,40 +254,17 @@ export class SearchService {
         }
       }
     } catch (e) {
-      console.warn('Backend YouTube search endpoint error, trying fallback:', e);
+      console.warn('Live YouTube search failed, falling back:', e);
     }
 
-    // Direct YouTube API fallback if client API key provided
-    if (apiKey) {
-      try {
-        const musicQuery = encodeURIComponent(`${q} music official`);
-        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=10&q=${musicQuery}&key=${apiKey}`;
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.items && Array.isArray(data.items)) {
-            return data.items.map((item: any, idx: number) => {
-              const snippet = item.snippet;
-              return {
-                id: `yt-${item.id.videoId || idx}`,
-                title: snippet.title.replace(/&quot;/g, '"').replace(/&#39;/g, "'"),
-                artist: snippet.channelTitle.replace(' - Topic', ''),
-                album: 'YouTube Music Official',
-                artwork_url: snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || `https://i.ytimg.com/vi/${item.id.videoId}/hqdefault.jpg`,
-                duration: 210,
-                category: 'trending',
-                source: 'youtube',
-                provider_track_id: item.id.videoId,
-                plays_count: 500000,
-              };
-            });
-          }
-        }
-      } catch (e) {
-        console.warn('YouTube search request error:', e);
-      }
-    }
-
-    return [];
+    // 3. Match from local catalog for instantaneous YouTube results
+    return INITIAL_SONGS.filter(
+      (s) =>
+        s.provider_track_id &&
+        (matchesQuery(s.title, q) ||
+          (s.titleAr && matchesQuery(s.titleAr, q)) ||
+          matchesQuery(s.artist, q) ||
+          (s.artistAr && matchesQuery(s.artistAr, q)))
+    );
   }
 }

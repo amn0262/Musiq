@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useTransition } from 'react';
 import { useMusic } from '../context/MusicContext';
-import { SearchService, SearchResults } from '../services/searchService';
+import { SearchService, extractYouTubeVideoId } from '../services/searchService';
 import { StorageService } from '../services/storage';
-import { Song, Artist } from '../types/music';
+import { Song } from '../types/music';
 import { formatDuration } from '../utils/formatters';
+import { matchesQuery } from '../utils/arabic';
 import {
   Search,
   X,
@@ -13,14 +14,11 @@ import {
   Pause,
   Heart,
   PlusCircle,
-  Tv,
-  Music,
-  User,
-  Disc,
   Sparkles,
+  Link2,
+  Loader2,
+  TrendingUp,
 } from 'lucide-react';
-
-type SearchFilterTab = 'all' | 'songs' | 'artists' | 'albums' | 'lyrics' | 'youtube';
 
 export const SearchScreen: React.FC = () => {
   const {
@@ -38,19 +36,13 @@ export const SearchScreen: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<SearchFilterTab>('all');
   const [searchHistory, setSearchHistory] = useState<string[]>(() => StorageService.getSearchHistory());
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
-  const [results, setResults] = useState<SearchResults>({
-    songs: [],
-    artists: [],
-    albums: [],
-    lyricsMatches: [],
-    youtubeResults: [],
-  });
+  const [youtubeResults, setYoutubeResults] = useState<Song[]>([]);
   const [isSearchingYouTube, setIsSearchingYouTube] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [directLinkInput, setDirectLinkInput] = useState('');
+  const [, startTransition] = useTransition();
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -64,15 +56,15 @@ export const SearchScreen: React.FC = () => {
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // Debounce search input by 250ms
+  // Debounce search input by 280ms
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
-    }, 250);
+    }, 280);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Update suggestions while typing using real-time YouTube suggest
+  // Fetch real-time YouTube suggestions while typing
   useEffect(() => {
     if (searchQuery.trim().length > 0) {
       SearchService.getRemoteSuggestions(searchQuery).then((sug) => {
@@ -87,75 +79,85 @@ export const SearchScreen: React.FC = () => {
     }
   }, [searchQuery]);
 
-  // Execute search when debounced query changes
+  // Execute real YouTube search when debounced query changes
   useEffect(() => {
-    if (!debouncedQuery.trim()) {
-      setResults({
-        songs: [],
-        artists: [],
-        albums: [],
-        lyricsMatches: [],
-        youtubeResults: [],
-      });
+    const q = debouncedQuery.trim();
+    if (!q) {
+      setYoutubeResults([]);
+      setIsSearchingYouTube(false);
       return;
     }
 
-    startTransition(() => {
-      const localRes = SearchService.searchLocal(debouncedQuery, allSongs);
-      setResults((prev) => ({ ...prev, ...localRes }));
-    });
-
     // Save to history when search has substance
-    if (debouncedQuery.trim().length >= 2) {
-      const updated = StorageService.addSearchQuery(debouncedQuery);
+    if (q.length >= 2) {
+      const updated = StorageService.addSearchQuery(q);
       setSearchHistory(updated);
     }
 
-    // Trigger instant YouTube search
     setIsSearchingYouTube(true);
-    SearchService.searchYouTubeMusic(debouncedQuery)
-      .then((yt) => {
-        setResults((prev) => ({ ...prev, youtubeResults: yt }));
+    SearchService.searchYouTubeMusic(q)
+      .then((results) => {
+        startTransition(() => {
+          setYoutubeResults(results || []);
+        });
+      })
+      .catch((e) => {
+        console.warn('YouTube search error:', e);
       })
       .finally(() => {
         setIsSearchingYouTube(false);
       });
-  }, [debouncedQuery, allSongs]);
+  }, [debouncedQuery]);
 
   /**
    * Immediately hides suggestions and triggers instant audio playback of the selected track
    */
   const handleSelectSuggestionAndPlay = async (q: string) => {
-    // 1. Immediately dismiss suggestions dropdown
     setShowSuggestions(false);
     setSuggestions([]);
     setSearchQuery(q);
     setDebouncedQuery(q);
 
-    // 2. Immediate audio playback from local catalog if matched
-    const norm = q.toLowerCase().trim();
+    // 1. Direct YouTube Video ID or URL paste support
+    const directYtId = extractYouTubeVideoId(q);
+    if (directYtId) {
+      const directTrack: Song = {
+        id: `yt-direct-${directYtId}`,
+        title: `YouTube Audio Stream (${directYtId})`,
+        artist: 'YouTube Track',
+        album: 'Direct Stream',
+        artwork_url: `https://i.ytimg.com/vi/${directYtId}/hqdefault.jpg`,
+        duration: 240,
+        category: 'trending',
+        source: 'youtube',
+        provider_track_id: directYtId,
+        plays_count: 1000000,
+      };
+      playSong(directTrack, [directTrack, ...allSongs]);
+      return;
+    }
+
+    // 2. Immediate playback from catalog if matched
     const localMatch = allSongs.find(
       (s) =>
-        s.title.toLowerCase().includes(norm) ||
-        (s.titleAr && s.titleAr.toLowerCase().includes(norm)) ||
-        s.artist.toLowerCase().includes(norm) ||
-        (s.artistAr && s.artistAr.toLowerCase().includes(norm))
+        matchesQuery(s.title, q) ||
+        (s.titleAr && matchesQuery(s.titleAr, q)) ||
+        matchesQuery(s.artist, q) ||
+        (s.artistAr && matchesQuery(s.artistAr, q))
     );
 
     if (localMatch) {
       playSong(localMatch, allSongs);
+      return;
     }
 
-    // 3. Immediately query YouTube for official streaming track
+    // 3. Query YouTube live endpoint and immediately play first result
     setIsSearchingYouTube(true);
     try {
       const ytResults = await SearchService.searchYouTubeMusic(q);
       if (ytResults && ytResults.length > 0) {
-        setResults((prev) => ({ ...prev, youtubeResults: ytResults }));
-        // If local match was not present, play first YouTube result immediately!
-        if (!localMatch) {
-          playSong(ytResults[0], ytResults);
-        }
+        setYoutubeResults(ytResults);
+        playSong(ytResults[0], ytResults);
       }
     } catch (e) {
       console.warn('Direct suggestion play error:', e);
@@ -185,32 +187,24 @@ export const SearchScreen: React.FC = () => {
     if (currentSong?.id === song.id) {
       togglePlayPause();
     } else {
-      playSong(song, queueToUse);
+      playSong(song, queueToUse || (youtubeResults.length > 0 ? youtubeResults : allSongs));
     }
   };
 
-  const filterTabs: { id: SearchFilterTab; labelKey: string }[] = [
-    { id: 'all', labelKey: 'search_tab_all' },
-    { id: 'songs', labelKey: 'search_tab_songs' },
-    { id: 'artists', labelKey: 'search_tab_artists' },
-    { id: 'albums', labelKey: 'search_tab_albums' },
-    { id: 'lyrics', labelKey: 'search_tab_lyrics' },
-    { id: 'youtube', labelKey: 'search_tab_youtube' },
-  ];
+  const handleDirectLinkSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!directLinkInput.trim()) return;
+    handleSelectSuggestionAndPlay(directLinkInput.trim());
+    setDirectLinkInput('');
+  };
 
   const hasQuery = Boolean(searchQuery.trim());
-  const totalMatchesCount =
-    results.songs.length +
-    results.artists.length +
-    results.albums.length +
-    results.lyricsMatches.length +
-    (results.youtubeResults?.length || 0);
 
   return (
     <div className="space-y-6 pb-32">
-      {/* Prominent Large Search Bar */}
+      {/* Prominent Large Search Box */}
       <div id="search-bar-container" className="relative">
-        <div className="relative flex items-center bg-[#161624] border-2 border-purple-500/40 focus-within:border-purple-500 rounded-2xl px-4 py-3.5 shadow-2xl transition-all">
+        <div className="relative flex items-center bg-[#13131c] border-2 border-purple-500/40 focus-within:border-purple-500 rounded-2xl px-4 py-3.5 shadow-xl transition-all">
           <Search className="w-5 h-5 text-purple-400 me-3 flex-shrink-0" />
           <input
             type="text"
@@ -223,8 +217,8 @@ export const SearchScreen: React.FC = () => {
               if (suggestions.length > 0) setShowSuggestions(true);
             }}
             onKeyDown={handleKeyDown}
-            placeholder={t('search_placeholder')}
-            className="w-full bg-transparent text-white placeholder-gray-400 text-base sm:text-lg focus:outline-none"
+            placeholder={isRTL ? 'ابحث في يوتيوب عن أي أغنية، فنان أو ألبوم...' : 'Search YouTube for any song, artist or album...'}
+            className="w-full bg-transparent text-white placeholder-gray-500 text-base sm:text-lg focus:outline-none"
             autoFocus
           />
           {searchQuery && (
@@ -233,22 +227,23 @@ export const SearchScreen: React.FC = () => {
                 setSearchQuery('');
                 setSuggestions([]);
                 setShowSuggestions(false);
+                setYoutubeResults([]);
               }}
               className="p-1 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-              aria-label="Clear search input"
+              aria-label="Clear"
             >
               <X className="w-5 h-5" />
             </button>
           )}
         </div>
 
-        {/* Real-time search suggestions dropdown - immediately disappears on click and starts playing */}
+        {/* Real-time search suggestions dropdown */}
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-2 z-30 bg-[#161624]/98 backdrop-blur-2xl border border-purple-500/30 rounded-2xl p-2 shadow-2xl shadow-purple-950/80 animate-in fade-in duration-150">
+          <div className="absolute top-full left-0 right-0 mt-2 z-30 bg-[#161624]/98 backdrop-blur-2xl border border-purple-500/30 rounded-2xl p-2 shadow-2xl animate-in fade-in duration-150">
             <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/5 mb-1">
               <span className="text-[11px] font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="w-3 h-3" />
-                <span>{t('search_suggestions')}</span>
+                <span>{isRTL ? 'اقتراحات يوتيوب' : 'YouTube Suggestions'}</span>
               </span>
               <span className="text-[10px] text-gray-400 font-medium">
                 {isRTL ? 'اضغط للتشغيل الفوري' : 'Tap to Play Instantly'}
@@ -267,7 +262,7 @@ export const SearchScreen: React.FC = () => {
                     <span className="truncate font-medium group-hover:text-purple-200">{sug}</span>
                   </div>
 
-                  <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-500/20 text-purple-300 text-xs font-semibold group-hover:bg-purple-600 group-hover:text-white transition-colors ms-2 flex-shrink-0">
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-300 text-xs font-semibold group-hover:bg-purple-600 group-hover:text-white transition-colors ms-2 flex-shrink-0">
                     <Play className="w-3 h-3 fill-current" />
                     <span>{isRTL ? 'تشغيل' : 'Play'}</span>
                   </div>
@@ -278,42 +273,43 @@ export const SearchScreen: React.FC = () => {
         )}
       </div>
 
-      {/* Filter Tabs (All, Songs, Artists, Albums, Lyrics, YouTube) */}
-      {hasQuery && (
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-          {filterTabs.map((tab) => {
-            const isActive = activeFilter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveFilter(tab.id)}
-                className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-                  isActive
-                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                    : 'bg-[#1b1b28] hover:bg-[#252538] text-gray-300 border border-white/5'
-                }`}
-              >
-                {t(tab.labelKey)}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {/* Direct YouTube Link/ID Quick Input */}
+      <form
+        onSubmit={handleDirectLinkSubmit}
+        className="flex items-center gap-2 p-2.5 sm:p-3 rounded-2xl bg-[#13131c] border border-white/10 focus-within:border-red-500/50 shadow-md"
+      >
+        <Link2 className="w-4 h-4 text-red-400 ms-2 flex-shrink-0" />
+        <input
+          type="text"
+          value={directLinkInput}
+          onChange={(e) => setDirectLinkInput(e.target.value)}
+          placeholder={isRTL ? 'أو الصق رابط يوتيوب مباشر أو معرف فيديو هنا للتشغيل الفوري...' : 'Or paste a YouTube URL / Video ID here to stream instantly...'}
+          className="w-full bg-transparent text-white placeholder-gray-500 text-xs sm:text-sm focus:outline-none px-1"
+        />
+        <button
+          type="submit"
+          disabled={!directLinkInput.trim()}
+          className="px-3 sm:px-4 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-red-900/30 transition-all active:scale-95 flex-shrink-0"
+        >
+          <Play className="w-3.5 h-3.5 fill-current" />
+          <span>{isRTL ? 'تشغيل' : 'Play'}</span>
+        </button>
+      </form>
 
-      {/* Search History Chips (when input is empty) */}
+      {/* Search History Chips */}
       {!hasQuery && searchHistory.length > 0 && (
-        <div className="space-y-3 p-4 rounded-3xl bg-[#161622]/60 border border-white/5">
+        <div className="space-y-2 p-3.5 rounded-2xl bg-[#13131c]/60 border border-white/5">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-              <History className="w-4 h-4 text-purple-400" />
-              <span>{t('search_history')}</span>
+              <History className="w-3.5 h-3.5 text-purple-400" />
+              <span>{isRTL ? 'سجل البحث' : 'Recent Searches'}</span>
             </h3>
             <button
               onClick={handleClearHistory}
-              className="text-xs font-semibold text-gray-400 hover:text-rose-400 transition-colors flex items-center gap-1"
+              className="text-xs text-gray-400 hover:text-rose-400 transition-colors flex items-center gap-1"
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>{t('search_clear')}</span>
+              <Trash2 className="w-3 h-3" />
+              <span>{isRTL ? 'مسح' : 'Clear'}</span>
             </button>
           </div>
 
@@ -321,7 +317,7 @@ export const SearchScreen: React.FC = () => {
             {searchHistory.map((item, idx) => (
               <div
                 key={idx}
-                className="group flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1e1e2d] hover:bg-purple-600/20 border border-white/5 hover:border-purple-500/30 text-xs text-gray-300 hover:text-white transition-all"
+                className="group flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1c1c28] hover:bg-purple-600/20 border border-white/5 hover:border-purple-500/30 text-xs text-gray-300 hover:text-white transition-all"
               >
                 <button onClick={() => handleSelectSuggestionAndPlay(item)} className="cursor-pointer">
                   {item}
@@ -329,7 +325,7 @@ export const SearchScreen: React.FC = () => {
                 <button
                   onClick={() => handleRemoveHistoryItem(item)}
                   className="text-gray-500 hover:text-white transition-colors"
-                  aria-label={`Remove ${item} from history`}
+                  aria-label="Remove"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -339,232 +335,194 @@ export const SearchScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Search Results Display */}
+      {/* Active YouTube Live Search Results */}
       {hasQuery && (
-        <div className="space-y-6">
-          {totalMatchesCount === 0 && !isSearchingYouTube ? (
-            <div className="text-center py-16 space-y-3">
-              <div className="w-16 h-16 mx-auto rounded-full bg-white/5 flex items-center justify-center text-gray-500">
-                <Search className="w-8 h-8" />
-              </div>
-              <h3 className="text-lg font-bold text-white">{t('search_no_results')}</h3>
-              <p className="text-sm text-gray-400 max-w-sm mx-auto">
-                {isRTL
-                  ? 'جرب البحث باسم فنان آخر أو كتابة الحروف بدون تشكيل'
-                  : 'Try searching with a different artist name or spelling.'}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-red-400 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span>{isRTL ? 'نتائج يوتيوب المباشرة' : 'Live YouTube Search Results'}</span>
+            </h3>
+            {isSearchingYouTube && (
+              <span className="text-xs text-gray-400 flex items-center gap-1.5">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                <span>{isRTL ? 'جاري البحث في يوتيوب...' : 'Searching YouTube...'}</span>
+              </span>
+            )}
+          </div>
+
+          {youtubeResults.length === 0 && !isSearchingYouTube ? (
+            <div className="text-center py-12 space-y-2 rounded-2xl bg-[#13131c]/50 border border-white/5">
+              <p className="text-sm text-gray-400">
+                {isRTL ? 'لم يتم العثور على نتائج، جرب كلمات بحث أخرى' : 'No results found on YouTube, try another keyword'}
               </p>
             </div>
-          ) : null}
+          ) : (
+            <div className="space-y-2">
+              {youtubeResults.map((song) => {
+                const isCurrent = currentSong?.provider_track_id === song.provider_track_id || currentSong?.id === song.id;
+                const isSongPlaying = isCurrent && isPlaying;
+                const isFav = isFavorite(song.id);
 
-          {/* 1. Songs Results */}
-          {(activeFilter === 'all' || activeFilter === 'songs') && results.songs.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-purple-400">
-                {t('search_tab_songs')} ({results.songs.length})
-              </h3>
-              <div className="space-y-2">
-                {results.songs.map((song) => {
-                  const isCurrent = currentSong?.id === song.id;
-                  const isSongPlaying = isCurrent && isPlaying;
-                  const isFav = isFavorite(song.id);
-
-                  return (
-                    <div
-                      key={song.id}
-                      className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
-                        isCurrent
-                          ? 'bg-purple-950/30 border-purple-500/40'
-                          : 'bg-[#161622] hover:bg-[#1d1d2c] border-white/5'
-                      }`}
+                return (
+                  <div
+                    key={song.id}
+                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                      isCurrent
+                        ? 'bg-purple-950/30 border-purple-500/50 shadow-lg shadow-purple-950/50'
+                        : 'bg-[#13131c] hover:bg-[#1a1a27] border-white/5'
+                    }`}
+                  >
+                    <button
+                      onClick={() => handleSongPlay(song, youtubeResults)}
+                      className="flex items-center gap-3.5 flex-1 min-w-0 text-left cursor-pointer"
                     >
-                      <button
-                        onClick={() => handleSongPlay(song, results.songs)}
-                        className="flex items-center gap-3.5 flex-1 min-w-0 text-left"
-                      >
-                        <div className="relative w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
-                          <img
-                            src={song.artwork_url}
-                            alt={song.title}
-                            className="w-full h-full object-cover"
-                          />
-                          <div
-                            className={`absolute inset-0 bg-black/40 flex items-center justify-center ${
-                              isSongPlaying ? 'opacity-100' : 'opacity-0 hover:opacity-100'
-                            }`}
-                          >
-                            {isSongPlaying ? (
-                              <Pause className="w-4 h-4 text-white fill-white" />
-                            ) : (
-                              <Play className="w-4 h-4 text-white fill-white ms-0.5" />
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <p className={`text-sm font-bold truncate ${isCurrent ? 'text-purple-300' : 'text-white'}`}>
-                            {isRTL && song.titleAr ? song.titleAr : song.title}
-                          </p>
-                          <p className="text-xs text-gray-400 truncate mt-0.5">
-                            {isRTL && song.artistAr ? song.artistAr : song.artist}
-                          </p>
-                        </div>
-                      </button>
-
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400 font-mono">
-                          {formatDuration(song.duration)}
-                        </span>
-                        <button
-                          onClick={() => toggleFavorite(song.id)}
-                          className={`p-2 rounded-full ${
-                            isFav ? 'text-pink-500' : 'text-gray-400 hover:text-white'
+                      <div className="relative w-14 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-black">
+                        <img
+                          src={song.artwork_url}
+                          alt={song.title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                        <div
+                          className={`absolute inset-0 bg-black/40 flex items-center justify-center ${
+                            isSongPlaying ? 'opacity-100' : 'opacity-0 hover:opacity-100'
                           }`}
-                          aria-label="Favorite"
                         >
-                          <Heart className={`w-4 h-4 ${isFav ? 'fill-pink-500' : ''}`} />
-                        </button>
-                        <button
-                          onClick={() => openAddToPlaylist(song)}
-                          className="p-2 text-gray-400 hover:text-purple-300"
-                          aria-label="Add to playlist"
-                        >
-                          <PlusCircle className="w-4 h-4" />
-                        </button>
+                          {isSongPlaying ? (
+                            <Pause className="w-4 h-4 text-white fill-white" />
+                          ) : (
+                            <Play className="w-4 h-4 text-white fill-white ms-0.5" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-sm font-bold truncate ${isCurrent ? 'text-purple-300' : 'text-white'}`}>
+                          {song.title}
+                        </p>
+                        <p className="text-xs text-gray-400 truncate mt-0.5">
+                          {song.artist}
+                        </p>
+                      </div>
+                    </button>
+
+                    <div className="flex items-center gap-2 ms-2">
+                      <span className="text-xs text-gray-400 font-mono hidden sm:inline">
+                        {formatDuration(song.duration)}
+                      </span>
+                      <button
+                        onClick={() => toggleFavorite(song.id)}
+                        className={`p-2 rounded-full ${
+                          isFav ? 'text-pink-500' : 'text-gray-400 hover:text-white'
+                        }`}
+                        aria-label="Favorite"
+                      >
+                        <Heart className={`w-4 h-4 ${isFav ? 'fill-pink-500' : ''}`} />
+                      </button>
+                      <button
+                        onClick={() => openAddToPlaylist(song)}
+                        className="p-2 text-gray-400 hover:text-purple-300"
+                        aria-label="Add to playlist"
+                      >
+                        <PlusCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* When no search query, show Top YouTube Streaming Catalog */}
+      {!hasQuery && (
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4" />
+              <span>{isRTL ? 'الأكثر استماعاً على يوتيوب' : 'Trending on YouTube'}</span>
+            </h3>
+            <span className="text-xs text-gray-400 font-medium">
+              {isRTL ? `${allSongs.length} أغنية جاهزة للتشغيل` : `${allSongs.length} songs ready`}
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {allSongs.map((song) => {
+              const isCurrent = currentSong?.id === song.id;
+              const isSongPlaying = isCurrent && isPlaying;
+              const isFav = isFavorite(song.id);
+
+              return (
+                <div
+                  key={song.id}
+                  className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                    isCurrent
+                      ? 'bg-purple-950/30 border-purple-500/50 shadow-lg shadow-purple-950/50'
+                      : 'bg-[#13131c] hover:bg-[#1a1a27] border-white/5'
+                  }`}
+                >
+                  <button
+                    onClick={() => handleSongPlay(song, allSongs)}
+                    className="flex items-center gap-3.5 flex-1 min-w-0 text-left cursor-pointer"
+                  >
+                    <div className="relative w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-black">
+                      <img
+                        src={song.artwork_url}
+                        alt={song.title}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                      <div
+                        className={`absolute inset-0 bg-black/40 flex items-center justify-center ${
+                          isSongPlaying ? 'opacity-100' : 'opacity-0 hover:opacity-100'
+                        }`}
+                      >
+                        {isSongPlaying ? (
+                          <Pause className="w-4 h-4 text-white fill-white" />
+                        ) : (
+                          <Play className="w-4 h-4 text-white fill-white ms-0.5" />
+                        )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
-          {/* 2. YouTube Music Discovery Results */}
-          {(activeFilter === 'all' || activeFilter === 'youtube') &&
-            results.youtubeResults &&
-            results.youtubeResults.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-red-400 flex items-center gap-2">
-                    <Tv className="w-4 h-4" />
-                    <span>{t('search_tab_youtube')}</span>
-                  </h3>
-                  <span className="text-[10px] text-gray-400 px-2 py-0.5 rounded bg-white/5 border border-white/5">
-                    Official API Stream
-                  </span>
-                </div>
-
-                <div className="space-y-2">
-                  {results.youtubeResults.map((song) => {
-                    const isCurrent = currentSong?.id === song.id;
-                    const isSongPlaying = isCurrent && isPlaying;
-
-                    return (
-                      <div
-                        key={song.id}
-                        className="flex items-center justify-between p-3 rounded-2xl bg-[#18151f] hover:bg-[#201c2a] border border-red-500/20 hover:border-red-500/40 transition-all"
-                      >
-                        <button
-                          onClick={() => handleSongPlay(song, results.youtubeResults)}
-                          className="flex items-center gap-3.5 flex-1 min-w-0 text-left"
-                        >
-                          <div className="relative w-14 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-black">
-                            <img
-                              src={song.artwork_url}
-                              alt={song.title}
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                              {isSongPlaying ? (
-                                <Pause className="w-4 h-4 text-white fill-white" />
-                              ) : (
-                                <Play className="w-4 h-4 text-white fill-white ms-0.5" />
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-bold text-white truncate">
-                              {song.title}
-                            </p>
-                            <p className="text-xs text-gray-400 truncate mt-0.5">
-                              {song.artist}
-                            </p>
-                          </div>
-                        </button>
-
-                        <div className="flex items-center gap-2 ms-2">
-                          <button
-                            onClick={() => openAddToPlaylist(song)}
-                            className="p-2 text-gray-400 hover:text-purple-300"
-                            aria-label="Add to playlist"
-                          >
-                            <PlusCircle className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-          {/* 3. Artists Results */}
-          {(activeFilter === 'all' || activeFilter === 'artists') && results.artists.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
-                <User className="w-4 h-4" />
-                <span>{t('search_tab_artists')}</span>
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {results.artists.map((art) => (
-                  <div
-                    key={art.id}
-                    className="p-4 rounded-2xl bg-[#161622] border border-white/5 flex flex-col items-center text-center"
-                  >
-                    <img
-                      src={art.avatar_url}
-                      alt={art.name}
-                      className="w-16 h-16 rounded-full object-cover mb-2 border border-purple-500/30"
-                    />
-                    <p className="text-sm font-bold text-white truncate w-full">
-                      {isRTL && art.nameAr ? art.nameAr : art.name}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {isRTL ? 'فنان' : 'Artist'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 4. Lyrics Match Results */}
-          {(activeFilter === 'all' || activeFilter === 'lyrics') && results.lyricsMatches.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-amber-400">
-                {t('search_tab_lyrics')} ({results.lyricsMatches.length})
-              </h3>
-              <div className="space-y-2">
-                {results.lyricsMatches.map((song) => (
-                  <div
-                    key={`lyr-${song.id}`}
-                    onClick={() => handleSongPlay(song)}
-                    className="p-3.5 rounded-2xl bg-[#171622] hover:bg-[#1f1d2e] border border-white/5 cursor-pointer space-y-1.5 transition-all"
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-bold text-white">
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-sm font-bold truncate ${isCurrent ? 'text-purple-300' : 'text-white'}`}>
                         {isRTL && song.titleAr ? song.titleAr : song.title}
                       </p>
-                      <span className="text-xs text-gray-400">{song.artist}</span>
+                      <p className="text-xs text-gray-400 truncate mt-0.5">
+                        {isRTL && song.artistAr ? song.artistAr : song.artist}
+                      </p>
                     </div>
-                    <p className="text-xs text-purple-200/80 italic line-clamp-2 font-mono">
-                      "{song.lyricsAr || song.lyrics}"
-                    </p>
+                  </button>
+
+                  <div className="flex items-center gap-2 ms-2">
+                    <span className="text-xs text-gray-400 font-mono">
+                      {formatDuration(song.duration)}
+                    </span>
+                    <button
+                      onClick={() => toggleFavorite(song.id)}
+                      className={`p-2 rounded-full ${
+                        isFav ? 'text-pink-500' : 'text-gray-400 hover:text-white'
+                      }`}
+                      aria-label="Favorite"
+                    >
+                      <Heart className={`w-4 h-4 ${isFav ? 'fill-pink-500' : ''}`} />
+                    </button>
+                    <button
+                      onClick={() => openAddToPlaylist(song)}
+                      className="p-2 text-gray-400 hover:text-purple-300"
+                      aria-label="Add to playlist"
+                    >
+                      <PlusCircle className="w-4 h-4" />
+                    </button>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
