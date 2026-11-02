@@ -11,6 +11,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/youtube/lyrics"
+  to = "/.netlify/functions/youtube-lyrics"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

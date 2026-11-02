@@ -10,12 +10,15 @@ const STORAGE_KEYS = {
   USER_PROFILE: 'musiq_user_profile_v1',
 };
 
+export type VisualizerStyle = 'wave' | 'bars' | 'circle' | 'particles' | 'ribbon';
+
 export interface AppSettings {
   language: 'ar' | 'en';
   theme: 'dark' | 'oled' | 'midnight';
   audioQuality: '320' | '192' | '96';
   equalizer: 'flat' | 'bass_boost' | 'tarab_oriental' | 'vocal' | 'acoustic';
   autoplay: boolean;
+  visualizerStyle: VisualizerStyle;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -24,6 +27,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   audioQuality: '320',
   equalizer: 'flat',
   autoplay: true,
+  visualizerStyle: 'wave',
 };
 
 export const DEFAULT_USER: UserProfile = {

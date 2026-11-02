@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Song, Playlist, UserProfile, Gender } from '../types/music';
 import { INITIAL_SONGS } from '../data/catalog';
-import { StorageService, AppSettings, DEFAULT_SETTINGS, DEFAULT_USER } from '../services/storage';
+import { StorageService, AppSettings, DEFAULT_SETTINGS, DEFAULT_USER, VisualizerStyle } from '../services/storage';
 import { audioEngine } from '../services/audioEngine';
 import {
   shuffleQueue,
@@ -58,6 +58,10 @@ interface MusicContextType {
   playbackMode: PlaybackEngineMode;
   setPlaybackMode: (mode: PlaybackEngineMode) => void;
 
+  // Visualizer Style
+  visualizerStyle: VisualizerStyle;
+  setVisualizerStyle: (style: VisualizerStyle) => void;
+
   // Queue
   queue: Song[];
   queueIndex: number;
@@ -78,7 +82,7 @@ interface MusicContextType {
 
   // Playlists
   playlists: Playlist[];
-  createPlaylist: (name: string, description?: string, coverUrl?: string) => Playlist;
+  createPlaylist: (name: string, description?: string, coverUrl?: string, initialSongIds?: string[]) => Playlist;
   deletePlaylist: (id: string) => void;
   renamePlaylist: (id: string, newName: string) => void;
   addSongToPlaylist: (playlistId: string, songId: string) => { success: boolean; message?: string };
@@ -269,6 +273,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isShuffled, setIsShuffled] = useState<boolean>(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('all');
   const [playbackMode, setPlaybackMode] = useState<PlaybackEngineMode>('youtube');
+  const [visualizerStyle, setVisualizerStyleState] = useState<VisualizerStyle>(() => settings.visualizerStyle || 'wave');
 
   // Queue
   const [queue, setQueue] = useState<Song[]>(() => (recentSongs.length > 0 ? recentSongs : []));
@@ -288,7 +293,6 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     },
     []
   );
-
   const updateSettings = useCallback((newSettings: Partial<AppSettings>) => {
     setSettings((prev) => {
       const updated = { ...prev, ...newSettings };
@@ -296,6 +300,11 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return updated;
     });
   }, []);
+
+  const setVisualizerStyle = useCallback((style: VisualizerStyle) => {
+    setVisualizerStyleState(style);
+    updateSettings({ visualizerStyle: style });
+  }, [updateSettings]);
 
   const updateUser = useCallback((newUser: Partial<UserProfile>) => {
     setUser((prev) => {
@@ -558,15 +567,15 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [currentSong]);
 
   // Playlist management
-  const createPlaylist = useCallback((name: string, description?: string, coverUrl?: string): Playlist => {
+  const createPlaylist = useCallback((name: string, description?: string, coverUrl?: string, initialSongIds?: string[]): Playlist => {
     const newPl: Playlist = {
       id: `pl-${Date.now()}`,
       name: name.trim() || 'My Playlist',
       description: description?.trim() || '',
-      cover_url: coverUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=600&auto=format&fit=crop',
+      cover_url: coverUrl || '',
       color: 'from-purple-600 to-indigo-950',
       created_at: new Date().toISOString().split('T')[0],
-      song_ids: [],
+      song_ids: initialSongIds ? [...initialSongIds] : [],
       is_custom: true,
     };
     setPlaylists((prev) => {
@@ -595,18 +604,25 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addSongToPlaylist = useCallback(
     (playlistId: string, songId: string): { success: boolean; message?: string } => {
-      const targetPl = playlists.find((p) => p.id === playlistId);
-      if (!targetPl) return { success: false, message: 'Playlist not found' };
-
-      const check = canAddSongToPlaylist(targetPl.song_ids, songId, false);
-      if (!check.allowed) {
-        return { success: false, message: check.reason };
-      }
+      let result = { success: false, message: 'Playlist not found' };
 
       setPlaylists((prev) => {
+        const targetPl = prev.find((p) => p.id === playlistId);
+        if (!targetPl) {
+          result = { success: false, message: 'Playlist not found' };
+          return prev;
+        }
+
+        const check = canAddSongToPlaylist(targetPl.song_ids, songId, false);
+        if (!check.allowed) {
+          result = { success: false, message: check.reason || 'Cannot add song to playlist' };
+          return prev;
+        }
+
+        result = { success: true, message: 'Song added to playlist' };
         const updated = prev.map((p) => {
           if (p.id === playlistId) {
-            return { ...p, song_ids: [...p.song_ids, songId] };
+            return { ...p, song_ids: [songId, ...p.song_ids] };
           }
           return p;
         });
@@ -614,9 +630,9 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return updated;
       });
 
-      return { success: true };
+      return result;
     },
-    [playlists]
+    []
   );
 
   const removeSongFromPlaylist = useCallback((playlistId: string, songId: string) => {
@@ -737,6 +753,9 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         repeatMode,
         playbackMode,
         setPlaybackMode,
+
+        visualizerStyle,
+        setVisualizerStyle,
 
         queue,
         queueIndex,

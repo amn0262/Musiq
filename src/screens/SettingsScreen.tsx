@@ -13,12 +13,18 @@ import {
   UserCheck,
   Sparkles,
   ExternalLink,
+  Waves,
+  BarChart2,
+  Disc,
+  Activity,
 } from 'lucide-react';
 
 export const SettingsScreen: React.FC = () => {
   const {
     settings,
     updateSettings,
+    visualizerStyle,
+    setVisualizerStyle,
     user,
     updateUser,
     clearHistory,
@@ -236,6 +242,78 @@ export const SettingsScreen: React.FC = () => {
               <p className="text-[10px] text-gray-400 mt-0.5">{item.sub}</p>
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Audio Visualizer Style */}
+      <div className="p-5 rounded-3xl bg-[#161622] border border-white/10 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <Waves className="w-4 h-4 text-white" />
+            <span>Audio Visualizer Style</span>
+          </h3>
+          <span className="text-[11px] font-mono text-gray-400 uppercase">
+            {visualizerStyle}
+          </span>
+        </div>
+        <p className="text-xs text-gray-400">
+          Choose the visual animation style displayed in the full screen player and lock screen view:
+        </p>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
+          {[
+            {
+              id: 'wave',
+              name: 'Harmonic Wave',
+              desc: 'Flowing left-to-right sine wave',
+              icon: Waves,
+            },
+            {
+              id: 'bars',
+              name: 'Spectrum Bars',
+              desc: 'Mirrored frequency equalizer',
+              icon: BarChart2,
+            },
+            {
+              id: 'circle',
+              name: 'Pulsing Ring',
+              desc: 'Radial sound wave circle',
+              icon: Disc,
+            },
+            {
+              id: 'particles',
+              name: 'Sound Particles',
+              desc: 'Nebula cosmic audio nodes',
+              icon: Sparkles,
+            },
+            {
+              id: 'ribbon',
+              name: 'Dual Ribbon',
+              desc: 'Intertwined flowing neon waves',
+              icon: Activity,
+            },
+          ].map((item) => {
+            const Icon = item.icon;
+            const isSelected = visualizerStyle === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setVisualizerStyle(item.id as any)}
+                className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-white/10 border-white text-white font-bold ring-1 ring-white/30 shadow-lg'
+                    : 'bg-[#101014] border-white/5 text-gray-400 hover:text-white hover:border-white/20'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <Icon className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-gray-400'}`} />
+                  {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                </div>
+                <p className="text-xs font-bold text-white">{item.name}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">{item.desc}</p>
+              </button>
+            );
+          })}
         </div>
       </div>
 

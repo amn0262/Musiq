@@ -23,8 +23,7 @@ export const AddToPlaylistModal: React.FC = () => {
       setFeedback('Song added to playlist');
       setTimeout(() => {
         setFeedback(null);
-        closeAddToPlaylist();
-      }, 1000);
+      }, 2000);
     } else {
       setFeedback(res.message || 'Already in playlist');
       setTimeout(() => setFeedback(null), 2500);
@@ -33,16 +32,15 @@ export const AddToPlaylistModal: React.FC = () => {
 
   const handleCreateAndAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPlaylistName.trim()) return;
+    const name = newPlaylistName.trim();
+    if (!name) return;
 
-    const newPl = createPlaylist(newPlaylistName.trim());
-    addSongToPlaylist(newPl.id, songForPlaylistModal.id);
+    createPlaylist(name, '', '', [songForPlaylistModal.id]);
     setNewPlaylistName('');
-    setFeedback('Playlist created and song added');
+    setFeedback(`Created "${name}" and added song!`);
     setTimeout(() => {
       setFeedback(null);
-      closeAddToPlaylist();
-    }, 1000);
+    }, 3000);
   };
 
   return (

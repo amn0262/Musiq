@@ -690,15 +690,41 @@ class YouTubeAudioService {
   }
 
   public setVolume(vol0to1: number) {
-    this.volume = Math.round(vol0to1 * 100);
-    if (this.player && typeof this.player.setVolume === 'function') {
+    const clamped = Math.max(0, Math.min(1, isNaN(vol0to1) ? 0.8 : vol0to1));
+    this.volume = Math.round(clamped * 100);
+
+    if (this.player) {
       try {
-        this.player.unMute();
-        this.player.setVolume(this.volume);
+        if (this.volume === 0) {
+          if (typeof this.player.mute === 'function') {
+            this.player.mute();
+          }
+          if (typeof this.player.setVolume === 'function') {
+            this.player.setVolume(0);
+          }
+        } else {
+          if (typeof this.player.unMute === 'function') {
+            this.player.unMute();
+          }
+          if (typeof this.player.setVolume === 'function') {
+            this.player.setVolume(this.volume);
+          }
+        }
+      } catch (err) {
+        console.warn('YouTube setVolume error handled:', err);
+      }
+    }
+
+    if (this.masterGain && this.audioCtx) {
+      try {
+        this.masterGain.gain.setValueAtTime(clamped, this.audioCtx.currentTime);
       } catch {}
     }
-    if (this.masterGain && this.audioCtx) {
-      this.masterGain.gain.setValueAtTime(vol0to1, this.audioCtx.currentTime);
+
+    if (this.carrierAudio) {
+      try {
+        this.carrierAudio.volume = Math.max(0.001, clamped * 0.05);
+      } catch {}
     }
   }
 

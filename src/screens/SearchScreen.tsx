@@ -18,7 +18,12 @@ import {
   Loader2,
   Music,
   Clock,
+  Film,
+  Mic,
+  Radio,
+  Video,
 } from 'lucide-react';
+import { detectContentType, getContentTypeInfo } from '../utils/contentType';
 
 export const SearchScreen: React.FC = () => {
   const {
@@ -412,9 +417,25 @@ export const SearchScreen: React.FC = () => {
                         <p className={`text-sm font-semibold truncate ${isCurrent ? 'text-white font-bold' : 'text-gray-200'}`}>
                           {song.title}
                         </p>
-                        <p className="text-xs text-gray-400 truncate mt-0.5">
-                          {song.artist}
-                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                          {(() => {
+                            const cType = song.contentType || detectContentType(song.title, song.artist);
+                            const info = getContentTypeInfo(cType);
+                            return (
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border flex-shrink-0 ${info.badgeClass}`}>
+                                {cType === 'movie' && <Film className="w-2.5 h-2.5" />}
+                                {cType === 'podcast' && <Mic className="w-2.5 h-2.5" />}
+                                {cType === 'live' && <Radio className="w-2.5 h-2.5" />}
+                                {cType === 'video' && <Video className="w-2.5 h-2.5" />}
+                                {cType === 'music' && <Music className="w-2.5 h-2.5" />}
+                                <span>{info.label}</span>
+                              </span>
+                            );
+                          })()}
+                          <p className="text-xs text-gray-400 truncate">
+                            {song.artist}
+                          </p>
+                        </div>
                       </div>
                     </button>
 
@@ -519,9 +540,25 @@ export const SearchScreen: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-400 truncate mt-0.5">
-                          {song.artist}
-                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                          {(() => {
+                            const cType = song.contentType || detectContentType(song.title, song.artist);
+                            const info = getContentTypeInfo(cType);
+                            return (
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border flex-shrink-0 ${info.badgeClass}`}>
+                                {cType === 'movie' && <Film className="w-2.5 h-2.5" />}
+                                {cType === 'podcast' && <Mic className="w-2.5 h-2.5" />}
+                                {cType === 'live' && <Radio className="w-2.5 h-2.5" />}
+                                {cType === 'video' && <Video className="w-2.5 h-2.5" />}
+                                {cType === 'music' && <Music className="w-2.5 h-2.5" />}
+                                <span>{info.label}</span>
+                              </span>
+                            );
+                          })()}
+                          <p className="text-xs text-gray-400 truncate">
+                            {song.artist}
+                          </p>
+                        </div>
                       </div>
                     </button>
 

@@ -8,6 +8,8 @@ export type Category =
   | 'relaxing'
   | 'trending';
 
+export type ContentType = 'music' | 'movie' | 'podcast' | 'live' | 'video';
+
 export interface Song {
   id: string;
   title: string;
@@ -25,6 +27,7 @@ export interface Song {
   lyricsAr?: string;
   plays_count?: number;
   releaseYear?: number;
+  contentType?: ContentType;
 }
 
 export interface Playlist {
@@ -66,12 +69,8 @@ export interface UserProfile {
   gender: Gender;
   email: string;
   avatar: string;
-  plan: 'MUSIQ Premium' | 'Free';
+  plan: string;
   preferredGenres: string[];
   onboardingCompleted: boolean;
   tourCompleted: boolean;
-}
-
-export interface SearchFilter {
-  type: 'all' | 'songs' | 'artists' | 'albums' | 'lyrics' | 'youtube';
 }
