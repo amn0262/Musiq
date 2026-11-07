@@ -31,8 +31,8 @@ import { DeveloperInfoModal } from './DeveloperInfoModal';
 const VISUALIZER_CYCLE: { id: VisualizerStyle; label: string }[] = [
   { id: 'wave', label: 'Wave' },
   { id: 'bars', label: 'Bars' },
-  { id: 'circle', label: 'Ring' },
-  { id: 'particles', label: 'Particles' },
+  { id: 'circle', label: 'Pulsar' },
+  { id: 'particles', label: 'Galaxy' },
   { id: 'ribbon', label: 'Ribbon' },
 ];
 
@@ -73,6 +73,8 @@ export const FullScreenPlayer: React.FC = () => {
   const [prevVolume, setPrevVolume] = useState<number>(0.85);
   const [isIdle, setIsIdle] = useState<boolean>(false);
   const [isDevInfoOpen, setIsDevInfoOpen] = useState<boolean>(false);
+  const [isScrubbing, setIsScrubbing] = useState<boolean>(false);
+  const [scrubTime, setScrubTime] = useState<number>(0);
   const idleTimerRef = useRef<number | null>(null);
 
   // YouTube Lyrics State
@@ -155,11 +157,11 @@ export const FullScreenPlayer: React.FC = () => {
       idleTimerRef.current = null;
     }
 
-    // Only set idle countdown if modals are closed
+    // Only set idle countdown if modals are closed (12 seconds of inactivity)
     if (!isDevInfoOpen && !isSoundEnhancerOpen) {
       idleTimerRef.current = window.setTimeout(() => {
         setIsIdle(true);
-      }, 5000);
+      }, 12000);
     }
   }, [isDevInfoOpen, isSoundEnhancerOpen]);
 
@@ -215,7 +217,19 @@ export const FullScreenPlayer: React.FC = () => {
 
   const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const target = parseFloat(e.target.value);
-    seekTo(target);
+    setScrubTime(target);
+  };
+
+  const handleSeekStart = () => {
+    setIsScrubbing(true);
+    setScrubTime(currentTime);
+  };
+
+  const handleSeekCommit = () => {
+    if (isScrubbing) {
+      seekTo(scrubTime, true);
+      setIsScrubbing(false);
+    }
   };
 
   // Determine which lyrics to render
@@ -234,10 +248,10 @@ export const FullScreenPlayer: React.FC = () => {
           isIdle ? 'cursor-none' : ''
         }`}
       >
-        {/* Top Header Bar (Fades out when idle for 5s) */}
+        {/* Top Header Bar (Dims gracefully when idle) */}
         <div
-          className={`relative z-20 px-4 sm:px-6 py-4 flex items-center justify-between border-b border-[#1f1f2c] transition-opacity duration-700 ${
-            isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          className={`relative z-20 px-4 sm:px-6 py-4 flex items-center justify-between border-b border-[#1f1f2c] transition-all duration-500 ${
+            isIdle ? 'opacity-30 hover:opacity-100' : 'opacity-100'
           }`}
         >
           <button
@@ -474,10 +488,10 @@ export const FullScreenPlayer: React.FC = () => {
           )}
         </div>
 
-        {/* Bottom Controls Section (Fades out when idle for 5s) */}
+        {/* Bottom Controls Section (Dims gracefully when idle) */}
         <div
-          className={`relative z-20 w-full max-w-xl mx-auto px-6 pb-6 pt-2 transition-opacity duration-700 ${
-            isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          className={`relative z-20 w-full max-w-xl mx-auto px-6 pb-6 pt-2 transition-all duration-500 ${
+            isIdle ? 'opacity-35 hover:opacity-100' : 'opacity-100'
           }`}
         >
           {/* Progress Bar & Timestamps */}
@@ -486,15 +500,20 @@ export const FullScreenPlayer: React.FC = () => {
               type="range"
               min="0"
               max={duration || 100}
-              step="0.5"
-              value={currentTime}
+              step="0.2"
+              value={isScrubbing ? scrubTime : currentTime}
+              onPointerDown={handleSeekStart}
+              onTouchStart={handleSeekStart}
               onChange={handleSeekChange}
+              onPointerUp={handleSeekCommit}
+              onTouchEnd={handleSeekCommit}
+              onKeyUp={handleSeekCommit}
               className="w-full accent-white cursor-pointer"
               aria-label="Track progress slider"
             />
             <div className="flex justify-between items-center text-xs text-gray-400 font-mono mt-1 px-1">
-              <span>{formatDuration(currentTime)}</span>
-              <span>{formatRemaining(currentTime, duration)}</span>
+              <span>{formatDuration(isScrubbing ? scrubTime : currentTime)}</span>
+              <span>{formatRemaining(isScrubbing ? scrubTime : currentTime, duration)}</span>
             </div>
           </div>
 

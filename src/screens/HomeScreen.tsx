@@ -1,620 +1,753 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useMusic } from '../context/MusicContext';
-import { Song, Category } from '../types/music';
-import { POPULAR_ARTISTS } from '../data/catalog';
-import { formatDuration } from '../utils/formatters';
-import { getTimeGreeting } from '../utils/greeting';
+import { Song } from '../types/music';
+import { formatDuration, formatRemaining } from '../utils/formatters';
+import { SearchService } from '../services/searchService';
+import { AudioVisualizer } from '../components/AudioVisualizer';
+import { VisualizerStyle } from '../services/storage';
+import {
+  filterSameArtist,
+  filterSameGenre,
+  combineRecommendations,
+  getArabicGenreLabel,
+} from '../utils/recommendationRules';
 import {
   Search,
   Play,
   Pause,
+  SkipBack,
+  SkipForward,
+  Shuffle,
+  Repeat,
+  Repeat1,
   Heart,
   PlusCircle,
-  Sparkles,
-  TrendingUp,
-  Flame,
-  Radio,
-  Disc3,
-  Timer,
-  RefreshCw,
-  FolderPlus,
-  HelpCircle,
+  History,
+  Trash2,
+  Music,
   Clock,
+  Sparkles,
+  Sliders,
+  Maximize2,
+  Loader2,
+  ListMusic,
+  Disc3,
+  User,
+  Volume2,
+  VolumeX,
+  FileText,
+  Layers,
 } from 'lucide-react';
+
+const VISUALIZER_CYCLE: { id: VisualizerStyle; label: string }[] = [
+  { id: 'wave', label: 'موجي' },
+  { id: 'bars', label: 'أعمدة' },
+  { id: 'circle', label: 'دائري' },
+  { id: 'particles', label: 'مجرة' },
+  { id: 'ribbon', label: 'شريطي' },
+];
 
 export const HomeScreen: React.FC = () => {
   const {
-    allSongs,
-    playlists,
-    recentlyPlayed,
     currentSong,
     isPlaying,
+    currentTime,
+    duration,
+    volume,
+    isShuffled,
+    repeatMode,
     playSong,
     togglePlayPause,
+    nextTrack,
+    prevTrack,
+    seekTo,
+    setVolume,
+    toggleShuffle,
+    cycleRepeatMode,
     isFavorite,
     toggleFavorite,
     openAddToPlaylist,
-    setActiveTab,
-    openTour,
-    user,
-    isRTL,
-    t,
+    openSearchModal,
+    openFullScreenPlayer,
+    openSoundEnhancer,
+    soundEnhancerEnabled,
+    openPlaylistsModal,
+    openFavoritesModal,
+    openQueueModal,
+    openLyricsModal,
+    openHistoryModal,
+    visualizerStyle,
+    setVisualizerStyle,
+    searchHistory,
+    clearSearchHistory,
+    recentlyPlayed,
+    queue,
+    allSongs,
   } = useMusic();
 
-  const [selectedCategory, setSelectedCategory] = useState<Category>('all');
+  const activeSong = currentSong || allSongs[0];
 
-  // Dynamic time greeting
-  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [recommendationFilter, setRecommendationFilter] = useState<'all' | 'artist' | 'genre'>('all');
+  const [remoteArtistSongs, setRemoteArtistSongs] = useState<Song[]>([]);
+  const [isLoadingRemote, setIsLoadingRemote] = useState(false);
+  const [prevVolume, setPrevVolume] = useState<number>(0.85);
+  const [isScrubbing, setIsScrubbing] = useState<boolean>(false);
+  const [scrubTime, setScrubTime] = useState<number>(0);
+
+  // Auto-initialize currentSong with first song if none loaded
   useEffect(() => {
-    const timer = setInterval(() => setCurrentDate(new Date()), 60000);
-    return () => clearInterval(timer);
-  }, []);
+    if (!currentSong && allSongs.length > 0) {
+      playSong(allSongs[0], allSongs);
+    }
+  }, [currentSong, allSongs, playSong]);
 
-  const liveGreeting = useMemo(() => {
-    return getTimeGreeting(user.name, user.gender, currentDate, isRTL ? 'ar' : 'en');
-  }, [user.name, user.gender, currentDate, isRTL]);
-
-  // 3-Minute Rotating Recommendations Engine
-  const ROTATE_INTERVAL_SECONDS = 180; // 3 minutes
-  const [secondsRemaining, setSecondsRemaining] = useState(ROTATE_INTERVAL_SECONDS);
-  const [isRotating, setIsRotating] = useState(false);
-  const [recommendationSeed, setRecommendationSeed] = useState(0);
-
-  // Generate randomized suggestions matching or biased by user preferences
-  const rotatingSuggestions = useMemo(() => {
-    if (!allSongs || allSongs.length === 0) return [];
-
-    // Filter or prioritize songs that match user preferences
-    const pool = [...allSongs];
-    // Simple deterministic pseudo-shuffle based on seed
-    const shuffled = pool.sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 6);
-  }, [allSongs, recommendationSeed]);
-
-  const refreshRecommendations = useCallback(() => {
-    setIsRotating(true);
-    setRecommendationSeed((prev) => prev + 1);
-    setSecondsRemaining(ROTATE_INTERVAL_SECONDS);
-    setTimeout(() => setIsRotating(false), 500);
-  }, []);
-
-  // 3-minute automatic countdown timer
+  // Dynamically fetch live suggestions for the same singer/artist whenever activeSong changes
   useEffect(() => {
-    const interval = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          // Trigger rotation
-          setRecommendationSeed((s) => s + 1);
-          return ROTATE_INTERVAL_SECONDS;
+    if (!activeSong?.artist) return;
+
+    let isMounted = true;
+    setIsLoadingRemote(true);
+
+    SearchService.searchYouTubeMusic(activeSong.artist)
+      .then((res) => {
+        if (isMounted && res) {
+          const filtered = res.filter(
+            (s) => s.id !== activeSong.id && s.provider_track_id !== activeSong.provider_track_id
+          );
+          setRemoteArtistSongs(filtered.slice(0, 10));
         }
-        return prev - 1;
+        if (isMounted) setIsLoadingRemote(false);
+      })
+      .catch((err) => {
+        console.warn('Failed to load related artist songs:', err);
+        if (isMounted) setIsLoadingRemote(false);
       });
-    }, 1000);
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, [activeSong?.artist, activeSong?.id]);
 
-  const formatTimer = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  // Compute recommendations for the same artist and style/genre
+  const { sameArtistList, sameGenreList, combinedList } = useMemo(() => {
+    if (!activeSong) {
+      return { sameArtistList: [], sameGenreList: [], combinedList: [] };
+    }
 
-  const categories: { id: Category; labelKey: string }[] = [
-    { id: 'all', labelKey: 'cat_all' },
-    { id: 'arabic', labelKey: 'cat_arabic' },
-    { id: 'international', labelKey: 'cat_international' },
-    { id: 'pop', labelKey: 'cat_pop' },
-    { id: 'rap', labelKey: 'cat_rap' },
-    { id: 'classical', labelKey: 'cat_classical' },
-    { id: 'relaxing', labelKey: 'cat_relaxing' },
-    { id: 'trending', labelKey: 'cat_trending' },
-  ];
+    const poolMap = new Map<string, Song>();
+    allSongs.forEach((s) => poolMap.set(s.provider_track_id || s.id, s));
+    recentlyPlayed.forEach((s) => poolMap.set(s.provider_track_id || s.id, s));
+    remoteArtistSongs.forEach((s) => poolMap.set(s.provider_track_id || s.id, s));
+    const combinedPool = Array.from(poolMap.values());
 
-  const filteredSongs = selectedCategory === 'all'
-    ? allSongs
-    : allSongs.filter((s) => s.category === selectedCategory);
+    const artistMatches = filterSameArtist(combinedPool, activeSong);
+    const genreMatches = filterSameGenre(combinedPool, activeSong);
+    const combined = combineRecommendations(artistMatches, genreMatches, activeSong.id, 16);
+
+    return {
+      sameArtistList: artistMatches,
+      sameGenreList: genreMatches,
+      combinedList: combined,
+    };
+  }, [activeSong, allSongs, recentlyPlayed, remoteArtistSongs]);
+
+  // Displayed recommendations based on active filter
+  const displayedRecommendations = useMemo(() => {
+    if (recommendationFilter === 'artist') {
+      return sameArtistList.map((song) => ({ song, reason: 'artist' as const }));
+    }
+    if (recommendationFilter === 'genre') {
+      return sameGenreList.map((song) => ({ song, reason: 'genre' as const }));
+    }
+    return combinedList;
+  }, [recommendationFilter, sameArtistList, sameGenreList, combinedList]);
 
   const handleSongPlay = (song: Song, queueToUse?: Song[]) => {
-    if (currentSong?.id === song.id) {
+    if (currentSong?.id === song.id || currentSong?.provider_track_id === song.provider_track_id) {
       togglePlayPause();
     } else {
-      playSong(song, queueToUse || filteredSongs);
+      playSong(
+        song,
+        queueToUse ||
+          displayedRecommendations.map((r) => r.song).concat(recentlyPlayed.length > 0 ? recentlyPlayed : allSongs)
+      );
     }
   };
 
+  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    setScrubTime(val);
+  };
+
+  const handleSeekStart = () => {
+    setIsScrubbing(true);
+    setScrubTime(currentTime);
+  };
+
+  const handleSeekCommit = () => {
+    if (isScrubbing) {
+      seekTo(scrubTime, true);
+      setIsScrubbing(false);
+    }
+  };
+
+  const cycleVisualizer = () => {
+    const idx = VISUALIZER_CYCLE.findIndex((v) => v.id === visualizerStyle);
+    const next = VISUALIZER_CYCLE[(idx + 1) % VISUALIZER_CYCLE.length].id;
+    setVisualizerStyle(next);
+  };
+
+  const currentVisualizerLabel =
+    VISUALIZER_CYCLE.find((v) => v.id === visualizerStyle)?.label || 'موجي';
+
+  const toggleMute = () => {
+    if (volume > 0) {
+      setPrevVolume(volume);
+      setVolume(0);
+    } else {
+      setVolume(prevVolume || 0.85);
+    }
+  };
+
+  const genreLabel = currentSong ? getArabicGenreLabel(currentSong.category) : '';
+
   return (
-    <div className="space-y-8 pb-32">
-      {/* Dynamic Personalized Time Greeting Banner */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-purple-950/70 via-[#181528] to-[#12121a] p-5 sm:p-7 border border-purple-500/30 shadow-2xl">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-purple-600/30 border border-purple-400/40 flex items-center justify-center text-2xl flex-shrink-0 shadow-lg shadow-purple-900/30">
-              {liveGreeting.icon === 'sun' && '☀️'}
-              {liveGreeting.icon === 'cloud-sun' && '🌤️'}
-              {liveGreeting.icon === 'moon' && '🌙'}
-              {liveGreeting.icon === 'sparkles' && '✨'}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  {liveGreeting.salutation}
-                </span>
-                <span className="text-[11px] text-gray-400 font-mono hidden sm:inline-flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-cyan-400" />
-                  {currentDate.toLocaleTimeString(isRTL ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white mt-1">
-                {liveGreeting.greeting}
-              </h2>
-              <p className="text-xs sm:text-sm text-gray-300 mt-0.5 leading-relaxed">
-                {liveGreeting.subGreeting}
-              </p>
-            </div>
-          </div>
+    <div className="space-y-4 pb-28 animate-in fade-in duration-150">
+      {/* 1. Quick Modals Launcher Toolbar (الأقسام تظهر بأزرار كنوافذ منبثقة) */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+        {/* Search Modal Button */}
+        <button
+          onClick={() => openSearchModal()}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-black hover:bg-gray-200 text-xs font-bold transition-all shadow-sm flex-shrink-0 cursor-pointer"
+          title="البحث عن أغنية أو فنان"
+        >
+          <Search className="w-3.5 h-3.5" />
+          <span>بحث</span>
+        </button>
 
-          <button
-            onClick={openTour}
-            className="self-end sm:self-center px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-gray-300 hover:text-white transition-all flex items-center gap-1.5 active:scale-95"
-            title="App Tour"
-          >
-            <HelpCircle className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{isRTL ? 'جولة التطبيق والتفضيلات' : 'App Tour & Taste'}</span>
-          </button>
-        </div>
-      </section>
+        {/* Playlists Modal Button */}
+        <button
+          onClick={openPlaylistsModal}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161622] hover:bg-[#202030] text-gray-200 hover:text-white border border-[#2a2a3e] text-xs font-medium transition-colors flex-shrink-0 cursor-pointer"
+          title="فتح قوائم التشغيل كشاشة منبثقة"
+        >
+          <ListMusic className="w-3.5 h-3.5 text-gray-400" />
+          <span>قوائم التشغيل</span>
+        </button>
 
-      {/* Hero Header & Prominent Search Input */}
-      <section className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-[#161626] to-[#101014] p-5 sm:p-8 border border-white/10 shadow-2xl">
-        <div className="max-w-2xl mx-auto text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-semibold">
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{isRTL ? 'اكتشف روائع الطرب والموسيقى العالمية عبر يوتيوب' : 'Discover Arabic & International Masterpieces'}</span>
-          </div>
+        {/* Favorites Modal Button */}
+        <button
+          onClick={openFavoritesModal}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161622] hover:bg-[#202030] text-gray-200 hover:text-red-400 border border-[#2a2a3e] text-xs font-medium transition-colors flex-shrink-0 cursor-pointer"
+          title="فتح المفضلة كشاشة منبثقة"
+        >
+          <Heart className="w-3.5 h-3.5 text-red-400" />
+          <span>المفضلة</span>
+        </button>
 
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-tight">
-            {isRTL ? (
-              <>
-                عالمك الموسيقي <span className="bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">الذكي</span>
-              </>
-            ) : (
-              <>
-                Your Smart <span className="bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">Music World</span>
-              </>
-            )}
-          </h1>
-
-          {/* Prominent Large Search Box */}
-          <div
-            onClick={() => setActiveTab('search')}
-            className="cursor-pointer group relative flex items-center w-full max-w-xl mx-auto bg-[#171724]/90 hover:bg-[#1f1f30] border-2 border-purple-500/30 hover:border-purple-500/70 rounded-2xl px-5 py-4 shadow-xl shadow-purple-950/40 transition-all hover:scale-[1.01]"
-          >
-            <Search className="w-6 h-6 text-purple-400 group-hover:text-cyan-400 group-hover:scale-110 transition-all me-3.5 flex-shrink-0" />
-            <span className="text-base sm:text-lg text-gray-300 font-medium truncate flex-1 text-left">
-              {t('search_placeholder')}
+        {/* Queue Modal Button */}
+        <button
+          onClick={openQueueModal}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161622] hover:bg-[#202030] text-gray-200 hover:text-white border border-[#2a2a3e] text-xs font-medium transition-colors flex-shrink-0 cursor-pointer"
+          title="عرض قائمة الانتظار الحالية"
+        >
+          <Layers className="w-3.5 h-3.5 text-gray-400" />
+          <span>قائمة الانتظار</span>
+          {queue.length > 0 && (
+            <span className="text-[10px] px-1 py-0.2 rounded bg-white/10 font-mono">
+              {queue.length}
             </span>
-            <span className="hidden sm:inline-block px-3 py-1 rounded-lg bg-purple-600/30 text-purple-200 text-xs font-bold border border-purple-500/30">
-              {isRTL ? 'بحث فوري' : 'Quick Search'}
-            </span>
-          </div>
-        </div>
+          )}
+        </button>
 
-        {/* Quick Categories Pills */}
-        <div className="mt-8 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-          {categories.map((cat) => {
-            const isSelected = selectedCategory === cat.id;
-            return (
+        {/* Lyrics Modal Button */}
+        <button
+          onClick={openLyricsModal}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161622] hover:bg-[#202030] text-gray-200 hover:text-white border border-[#2a2a3e] text-xs font-medium transition-colors flex-shrink-0 cursor-pointer"
+          title="عرض كلمات الأغنية"
+        >
+          <FileText className="w-3.5 h-3.5 text-gray-400" />
+          <span>الكلمات</span>
+        </button>
+
+        {/* Sound Enhancer Modal Button */}
+        <button
+          onClick={openSoundEnhancer}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors flex-shrink-0 cursor-pointer ${
+            soundEnhancerEnabled
+              ? 'bg-white/20 text-white border border-white/30'
+              : 'bg-[#161622] hover:bg-[#202030] text-gray-200 border border-[#2a2a3e]'
+          }`}
+          title="معادل الصوت والمؤثرات"
+        >
+          <Sliders className="w-3.5 h-3.5 text-gray-300" />
+          <span>المؤثرات</span>
+        </button>
+
+        {/* History Modal Button */}
+        <button
+          onClick={openHistoryModal}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161622] hover:bg-[#202030] text-gray-200 hover:text-white border border-[#2a2a3e] text-xs font-medium transition-colors flex-shrink-0 cursor-pointer"
+          title="سجل المقاطع المشغلة"
+        >
+          <History className="w-3.5 h-3.5 text-gray-400" />
+          <span>السجل</span>
+        </button>
+      </div>
+
+      {/* 2. الكلمات المؤخرة (Recent Search Keywords) */}
+      {searchHistory.length > 0 && (
+        <div className="p-3 rounded-xl bg-[#14141c] border border-[#222232] flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1.5 flex-shrink-0 text-gray-400">
+            <History className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-bold text-gray-300">الكلمات المؤخرة:</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1">
+            {searchHistory.map((word, idx) => (
               <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                  isSelected
-                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30 ring-1 ring-purple-400'
-                    : 'bg-[#1b1b28] hover:bg-[#252538] text-gray-300 border border-white/5'
-                }`}
+                key={`home-hist-${idx}-${word}`}
+                type="button"
+                onClick={() => openSearchModal(word)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#1c1c28] hover:bg-[#262638] border border-[#2c2c40] text-xs text-gray-300 hover:text-white transition-colors cursor-pointer flex-shrink-0"
               >
-                {t(cat.labelKey)}
+                <span>{word}</span>
               </button>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 3-MINUTE AUTO-ROTATING RECOMMENDATIONS WITH "ADD TO FAVORITES" */}
-      <section className="space-y-4 p-5 sm:p-6 rounded-3xl bg-gradient-to-b from-purple-950/30 via-[#161624] to-[#121218] border border-purple-500/30 shadow-xl">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <Timer className="w-5 h-5 text-cyan-400 animate-pulse" />
-              <h2 className="text-lg sm:text-xl font-black text-white">
-                {isRTL ? 'اقتراحات خصيصاً لك (تتجدد كل ٣ دقائق)' : 'Personalized Suggestions (Refreshes every 3 min)'}
-              </h2>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">
-              {isRTL
-                ? 'مختارات عشوائية ذكية متوافقة مع ذوقك الموسيقي، تتجدد تلقائياً كل 3 دقائق مع زر إضافة للمفضلة'
-                : 'Smart rotating selections refreshed every 180 seconds with instant Add to Favorites'}
-            </p>
-          </div>
-
-          {/* Countdown timer badge & manual refresh button */}
-          <div className="flex items-center gap-2.5 self-end sm:self-center">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs font-mono font-bold text-cyan-300">
-              <span className="text-[11px] font-sans text-gray-400">
-                {isRTL ? 'التجديد خلال:' : 'Next in:'}
-              </span>
-              <span className="tabular-nums text-sm font-black text-white bg-purple-950/80 px-2 py-0.5 rounded-lg border border-purple-500/30">
-                {formatTimer(secondsRemaining)}
-              </span>
-            </div>
-
-            <button
-              onClick={refreshRecommendations}
-              className={`p-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-200 hover:text-white transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold ${
-                isRotating ? 'animate-spin' : ''
-              }`}
-              title={isRTL ? 'جدد الاقتراحات الآن' : 'Refresh Suggestions Now'}
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span className="hidden sm:inline">{isRTL ? 'تجديد الآن' : 'Refresh'}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 6 Rotating Recommendations Cards with Direct Heart Favorite Button */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
-          {rotatingSuggestions.map((song) => {
-            const isCurrent = currentSong?.id === song.id;
-            const isSongPlaying = isCurrent && isPlaying;
-            const isFav = isFavorite(song.id);
-
-            return (
-              <div
-                key={`rot-${song.id}`}
-                className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
-                  isCurrent
-                    ? 'bg-[#1e1730] border-purple-500/60 shadow-lg shadow-purple-950/60'
-                    : 'bg-[#151522] hover:bg-[#1c1c2e] border-white/5'
-                }`}
-              >
-                <button
-                  onClick={() => handleSongPlay(song, rotatingSuggestions)}
-                  className="flex items-center gap-3.5 flex-1 min-w-0 text-left"
-                >
-                  <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 group">
-                    <img
-                      src={song.artwork_url}
-                      alt={song.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                    <div
-                      className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${
-                        isSongPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                      }`}
-                    >
-                      {isSongPlaying ? (
-                        <Pause className="w-5 h-5 text-white fill-white" />
-                      ) : (
-                        <Play className="w-5 h-5 text-white fill-white ms-0.5" />
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-sm font-bold truncate ${isCurrent ? 'text-purple-300' : 'text-white'}`}>
-                      {isRTL && song.titleAr ? song.titleAr : song.title}
-                    </p>
-                    <p className="text-xs text-gray-400 truncate mt-0.5">
-                      {isRTL && song.artistAr ? song.artistAr : song.artist}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-400">
-                      <span className="font-mono tabular-nums">{formatDuration(song.duration)}</span>
-                      <span>·</span>
-                      <span className="px-1.5 py-0.2 rounded bg-white/5 text-[10px] text-purple-300 uppercase">
-                        {song.category}
-                      </span>
-                    </div>
-                  </div>
-                </button>
-
-                {/* Direct Add to Favorites Button + Add to Playlist */}
-                <div className="flex items-center gap-1 ms-2">
-                  <button
-                    onClick={() => toggleFavorite(song.id)}
-                    className={`p-2 rounded-xl transition-all flex items-center gap-1 ${
-                      isFav
-                        ? 'bg-pink-500/20 text-pink-500 border border-pink-500/30'
-                        : 'bg-white/5 text-gray-400 hover:text-pink-400 hover:bg-white/10'
-                    }`}
-                    title={isFav ? (isRTL ? 'في المفضلة' : 'Favorited') : (isRTL ? 'أضف للمفضلة' : 'Add to Favorites')}
-                    aria-label="Toggle favorite"
-                  >
-                    <Heart className={`w-4 h-4 ${isFav ? 'fill-pink-500' : ''}`} />
-                  </button>
-
-                  <button
-                    onClick={() => openAddToPlaylist(song)}
-                    className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-purple-300 transition-colors"
-                    title={isRTL ? 'إضافة لقائمة تشغيل' : 'Add to Playlist'}
-                    aria-label="Add to playlist"
-                  >
-                    <PlusCircle className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Recently Played Row */}
-      {recentlyPlayed.length > 0 && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-              <Disc3 className="w-5 h-5 text-cyan-400" />
-              <span>{t('section_recently_played')}</span>
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {recentlyPlayed.slice(0, 6).map((song) => {
-              const isCurrent = currentSong?.id === song.id;
-              const isSongPlaying = isCurrent && isPlaying;
-
-              return (
-                <div
-                  key={`rec-${song.id}`}
-                  onClick={() => handleSongPlay(song, recentlyPlayed)}
-                  className="group relative bg-[#161622] hover:bg-[#1f1f2e] border border-white/5 hover:border-purple-500/30 rounded-2xl p-3 cursor-pointer transition-all hover:-translate-y-1"
-                >
-                  <div className="relative aspect-square rounded-xl overflow-hidden mb-2.5">
-                    <img
-                      src={song.artwork_url}
-                      alt={song.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                    <div
-                      className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${
-                        isSongPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                      }`}
-                    >
-                      <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-lg">
-                        {isSongPlaying ? (
-                          <Pause className="w-4 h-4 fill-white" />
-                        ) : (
-                          <Play className="w-4 h-4 fill-white ms-0.5" />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-xs sm:text-sm font-bold text-white truncate">
-                    {isRTL && song.titleAr ? song.titleAr : song.title}
-                  </p>
-                  <p className="text-[11px] text-gray-400 truncate mt-0.5">
-                    {isRTL && song.artistAr ? song.artistAr : song.artist}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Categorized Music Catalog */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-              <Flame className="w-5 h-5 text-purple-400" />
-              <span>{t('section_recommended')}</span>
-            </h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {isRTL ? 'مختارات موسيقية تناسب ذوقك الرفيع' : 'Handpicked for your musical taste'}
-            </p>
-          </div>
-          <button
-            onClick={() => setActiveTab('search')}
-            className="text-xs font-bold text-purple-400 hover:text-purple-300 transition-colors"
-          >
-            {t('view_all')}
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filteredSongs.slice(0, 9).map((song) => {
-            const isCurrent = currentSong?.id === song.id;
-            const isSongPlaying = isCurrent && isPlaying;
-            const isFav = isFavorite(song.id);
-
-            return (
-              <div
-                key={song.id}
-                className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
-                  isCurrent
-                    ? 'bg-[#1b172a] border-purple-500/50 shadow-md shadow-purple-950/50'
-                    : 'bg-[#161622] hover:bg-[#1d1d2b] border-white/5'
-                }`}
-              >
-                <button
-                  onClick={() => handleSongPlay(song, filteredSongs)}
-                  className="flex items-center gap-3.5 flex-1 min-w-0 text-left"
-                >
-                  <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 group">
-                    <img
-                      src={song.artwork_url}
-                      alt={song.title}
-                      className="w-full h-full object-cover"
-                    />
-                    <div
-                      className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${
-                        isSongPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                      }`}
-                    >
-                      {isSongPlaying ? (
-                        <Pause className="w-5 h-5 text-white fill-white" />
-                      ) : (
-                        <Play className="w-5 h-5 text-white fill-white ms-0.5" />
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className={`text-sm font-bold truncate ${isCurrent ? 'text-purple-300' : 'text-white'}`}>
-                        {isRTL && song.titleAr ? song.titleAr : song.title}
-                      </p>
-                    </div>
-                    <p className="text-xs text-gray-400 truncate mt-0.5">
-                      {isRTL && song.artistAr ? song.artistAr : song.artist}
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-gray-400">
-                      <span className="font-mono tabular-nums">
-                        {formatDuration(song.duration)}
-                      </span>
-                      <span aria-hidden="true" className="text-gray-600">·</span>
-                      <span className="capitalize">
-                        {song.category}
-                      </span>
-                    </div>
-                  </div>
-                </button>
-
-                {/* Actions: Favorite & Add to playlist */}
-                <div className="flex items-center gap-1.5 ms-2">
-                  <button
-                    onClick={() => toggleFavorite(song.id)}
-                    className={`p-2 rounded-full transition-colors ${
-                      isFav ? 'text-pink-500' : 'text-gray-400 hover:text-white'
-                    }`}
-                    aria-label="Toggle favorite"
-                  >
-                    <Heart className={`w-4 h-4 ${isFav ? 'fill-pink-500' : ''}`} />
-                  </button>
-                  <button
-                    onClick={() => openAddToPlaylist(song)}
-                    className="p-2 text-gray-400 hover:text-purple-300 transition-colors"
-                    aria-label="Add to playlist"
-                  >
-                    <PlusCircle className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Popular Artists Carousel */}
-      <section className="space-y-4">
-        <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-          <TrendingUp className="w-5 h-5 text-cyan-400" />
-          <span>{t('section_popular_artists')}</span>
-        </h2>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3 sm:gap-4">
-          {POPULAR_ARTISTS.map((artist) => {
-            return (
-              <div
-                key={artist.id}
-                onClick={() => setActiveTab('search')}
-                className="group flex flex-col items-center text-center p-2 rounded-2xl bg-[#161622]/60 hover:bg-[#1e1e2d] border border-white/5 cursor-pointer transition-all hover:scale-105"
-              >
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden p-0.5 bg-gradient-to-tr from-purple-500 to-cyan-400 shadow-md group-hover:shadow-purple-500/30 transition-shadow mb-2">
-                  <img
-                    src={artist.avatar_url}
-                    alt={artist.name}
-                    className="w-full h-full object-cover rounded-full"
-                  />
-                </div>
-                <p className="text-xs sm:text-sm font-bold text-white truncate w-full">
-                  {isRTL && artist.nameAr ? artist.nameAr : artist.name}
-                </p>
-                <p className="text-[10px] text-gray-400 font-medium">
-                  {isRTL ? 'فنان رسمي' : 'Artist'}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Personal Playlists Section - Empty state with creation prompt or preview */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-            <Radio className="w-5 h-5 text-purple-400" />
-            <span>{isRTL ? 'قوائم التشغيل الخاصة بك' : 'Your Playlists'}</span>
-          </h2>
-          <button
-            onClick={() => setActiveTab('playlists')}
-            className="text-xs font-bold text-purple-400 hover:text-purple-300 transition-colors"
-          >
-            {t('view_all')}
-          </button>
-        </div>
-
-        {playlists.length === 0 ? (
-          <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-[#181828] to-[#111118] border border-purple-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-start shadow-xl">
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-400 flex-shrink-0">
-                <FolderPlus className="w-8 h-8" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-base sm:text-lg font-bold text-white">
-                  {isRTL ? 'قوائمك بانتظار إبداعك الموسيقي' : 'Your playlists are waiting for you'}
-                </h3>
-                <p className="text-xs text-gray-400 max-w-md">
-                  {isRTL
-                    ? 'لقد قمنا بإفراغ القوائم لتبدأ بصناعة قوائمك الشخصية من الصفر وتجميع أغانيك المفضلة بحرية تامة.'
-                    : 'Playlists have been cleared so you can build your custom collections from scratch.'}
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setActiveTab('playlists')}
-              className="px-5 py-2.5 rounded-full bg-purple-600 hover:bg-purple-500 text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all active:scale-95"
-            >
-              <FolderPlus className="w-4 h-4" />
-              <span>{isRTL ? 'إنشاء قائمة جديدة الآن' : 'Create First Playlist'}</span>
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {playlists.slice(0, 3).map((pl) => (
-              <div
-                key={pl.id}
-                onClick={() => setActiveTab('playlists')}
-                className="group relative rounded-2xl overflow-hidden p-4 bg-gradient-to-br from-[#1c1c2b] to-[#12121a] border border-white/10 hover:border-purple-500/40 cursor-pointer transition-all hover:-translate-y-1 shadow-xl"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 shadow-lg">
-                    <img
-                      src={pl.cover_url}
-                      alt={pl.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400">
-                      PLAYLIST
-                    </span>
-                    <h3 className="text-base font-bold text-white truncate mt-0.5">
-                      {pl.name}
-                    </h3>
-                    <p className="text-xs text-gray-400 truncate mt-1">
-                      {pl.description || `${pl.song_ids.length} ${t('playlist_songs_count')}`}
-                    </p>
-                  </div>
-                </div>
-              </div>
             ))}
           </div>
+
+          <button
+            type="button"
+            onClick={clearSearchHistory}
+            className="text-[11px] text-gray-500 hover:text-gray-300 px-1 transition-colors cursor-pointer flex-shrink-0"
+            title="مسح الكلمات المؤخرة"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
+      {/* 3. مشغل الموسيقى الرئيسي (المشغل هو الواجهة الرئيسية) */}
+      <div className="p-4 sm:p-6 rounded-2xl bg-[#121218] border border-[#26263a] shadow-2xl space-y-4">
+        {/* Top Header Bar of the Main Player */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/10 text-white border border-white/10">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isPlaying ? 'bg-emerald-400 animate-pulse' : 'bg-gray-400'
+                }`}
+              />
+              <span>{isPlaying ? 'قيد التشغيل الآن' : 'جاهزة للتشغيل'}</span>
+            </span>
+
+            {genreLabel && (
+              <span className="text-[11px] text-gray-400 font-mono px-2 py-0.5 rounded bg-white/5 hidden sm:inline">
+                {genreLabel}
+              </span>
+            )}
+          </div>
+
+          {/* Visualizer Style Switcher & Full Screen Mode */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={cycleVisualizer}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 text-xs font-medium transition-colors cursor-pointer"
+              title="تغيير نمط المؤثرات البصرية"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-white" />
+              <span>{currentVisualizerLabel}</span>
+            </button>
+
+            <button
+              onClick={openFullScreenPlayer}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              title="عرض كامل الشاشة مع المؤثرات"
+              aria-label="Full screen"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Canvas Visualizer Display (Live Audio Reaction - No Images) */}
+        <div className="relative w-full h-32 sm:h-44 rounded-xl bg-black/60 border border-white/10 overflow-hidden flex items-center justify-center">
+          <AudioVisualizer isPlaying={isPlaying} style={visualizerStyle} className="w-full h-full" />
+        </div>
+
+        {/* Current Song Title & Artist (Clean Typography, Zero Images) */}
+        {activeSong ? (
+          <div className="space-y-3 pt-1">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-lg sm:text-2xl font-bold text-white tracking-tight leading-snug">
+                  {activeSong.title}
+                </h1>
+                <div className="flex items-center gap-2 mt-1 text-xs sm:text-sm text-gray-300">
+                  <User className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                  <span className="font-semibold text-gray-200">{activeSong.artist}</span>
+                  {activeSong.album && (
+                    <>
+                      <span className="text-gray-600">•</span>
+                      <span className="text-gray-400 truncate">{activeSong.album}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Direct Track Actions */}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(activeSong.id)}
+                  className={`p-2.5 rounded-xl transition-colors cursor-pointer ${
+                    isFavorite(activeSong.id)
+                      ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                      : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 border border-white/5'
+                  }`}
+                  aria-label="المفضلة"
+                  title={isFavorite(activeSong.id) ? 'في المفضلة' : 'إضافة للمفضلة'}
+                >
+                  <Heart
+                    className={`w-4 h-4 ${isFavorite(activeSong.id) ? 'fill-current text-red-400' : ''}`}
+                  />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openAddToPlaylist(activeSong)}
+                  className="p-2.5 rounded-xl bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 border border-white/5 transition-colors cursor-pointer"
+                  aria-label="إضافة لقائمة تشغيل"
+                  title="إضافة لقائمة تشغيل"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Seekable Range Slider & Timestamps */}
+            <div className="space-y-1.5 pt-2">
+              <input
+                type="range"
+                min="0"
+                max={duration || 100}
+                step="0.2"
+                value={isScrubbing ? scrubTime : currentTime}
+                onPointerDown={handleSeekStart}
+                onTouchStart={handleSeekStart}
+                onChange={handleSeekChange}
+                onPointerUp={handleSeekCommit}
+                onTouchEnd={handleSeekCommit}
+                onKeyUp={handleSeekCommit}
+                className="w-full accent-white cursor-pointer h-2 bg-white/10 rounded-lg"
+                aria-label="Seek track"
+              />
+              <div className="flex justify-between items-center text-xs text-gray-400 font-mono px-0.5">
+                <span>{formatDuration(isScrubbing ? scrubTime : currentTime)}</span>
+                <span>{formatRemaining(isScrubbing ? scrubTime : currentTime, duration)}</span>
+              </div>
+            </div>
+
+            {/* Transport Playback Controls (Shuffle, Prev, Big Play/Pause, Next, Repeat) */}
+            <div className="flex items-center justify-between pt-2">
+              {/* Shuffle Toggle */}
+              <button
+                type="button"
+                onClick={toggleShuffle}
+                className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                  isShuffled ? 'text-white bg-white/10' : 'text-gray-500 hover:text-gray-300'
+                }`}
+                title="خلط المقاطع"
+                aria-label="Toggle shuffle"
+              >
+                <Shuffle className="w-4 h-4" />
+              </button>
+
+              {/* Center Controls */}
+              <div className="flex items-center gap-3 sm:gap-4">
+                <button
+                  type="button"
+                  onClick={prevTrack}
+                  className="p-2 sm:p-2.5 rounded-xl text-gray-300 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                  aria-label="Previous track"
+                  title="السابق"
+                >
+                  <SkipBack className="w-5 h-5 sm:w-6 sm:h-6" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={togglePlayPause}
+                  className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-white text-black hover:bg-gray-200 flex items-center justify-center font-bold shadow-xl transition-transform active:scale-95 cursor-pointer"
+                  aria-label={isPlaying ? 'Pause' : 'Play'}
+                  title={isPlaying ? 'إيقاف مؤقت' : 'تشغيل'}
+                >
+                  {isPlaying ? (
+                    <Pause className="w-6 h-6 fill-current" />
+                  ) : (
+                    <Play className="w-6 h-6 fill-current ms-0.5" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={nextTrack}
+                  className="p-2 sm:p-2.5 rounded-xl text-gray-300 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                  aria-label="Next track"
+                  title="التالي"
+                >
+                  <SkipForward className="w-5 h-5 sm:w-6 sm:h-6" />
+                </button>
+              </div>
+
+              {/* Repeat Mode Cycle */}
+              <button
+                type="button"
+                onClick={cycleRepeatMode}
+                className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                  repeatMode !== 'off' ? 'text-white bg-white/10' : 'text-gray-500 hover:text-gray-300'
+                }`}
+                title={`تكرار: ${repeatMode}`}
+                aria-label="Cycle repeat mode"
+              >
+                {repeatMode === 'one' ? (
+                  <Repeat1 className="w-4 h-4" />
+                ) : (
+                  <Repeat className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+
+            {/* Bottom Row of Player: Volume & Quick Section Triggers */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-white/5">
+              {/* Volume Slider */}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={toggleMute}
+                  className="p-1.5 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                  title={volume === 0 ? 'إلغاء كتم الصوت' : 'كتم الصوت'}
+                >
+                  {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={volume}
+                  onChange={(e) => setVolume(parseFloat(e.target.value))}
+                  className="w-24 sm:w-28 accent-white cursor-pointer h-1.5"
+                  aria-label="Volume slider"
+                />
+                <span className="text-[10px] text-gray-400 font-mono w-7">
+                  {Math.round(volume * 100)}%
+                </span>
+              </div>
+
+              {/* Direct Buttons to open other sections as popups */}
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  onClick={openLyricsModal}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs transition-colors cursor-pointer"
+                  title="فتح كلمات الأغنية كشاشة منبثقة"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>الكلمات</span>
+                </button>
+
+                <button
+                  onClick={openQueueModal}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs transition-colors cursor-pointer"
+                  title="فتح قائمة الانتظار كشاشة منبثقة"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>الانتظار ({queue.length})</span>
+                </button>
+
+                <button
+                  onClick={openSoundEnhancer}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs transition-colors cursor-pointer"
+                  title="فتح معادل الصوت كشاشة منبثقة"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>المؤثرات</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="py-8 text-center text-gray-500 space-y-2">
+            <Disc3 className="w-8 h-8 mx-auto animate-spin" />
+            <p className="text-xs">جاري تجهيز المشغل الموسيقي...</p>
+          </div>
         )}
-      </section>
+      </div>
+
+      {/* 4. اقتراحات لنفس المطرب أو النمط (Suggestions Under the Active Player) */}
+      {activeSong && (
+        <div className="space-y-3 pt-2">
+          {/* Header of Suggestions */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-1 border-b border-[#222232]">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-white" />
+              <h2 className="text-sm sm:text-base font-bold text-white">
+                اقتراحات لنفس المطرب أو النمط
+              </h2>
+              {isLoadingRemote && (
+                <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin ms-1" />
+              )}
+            </div>
+
+            {/* Filter Tabs: All, Same Artist, Same Genre */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setRecommendationFilter('all')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                  recommendationFilter === 'all'
+                    ? 'bg-white text-black'
+                    : 'bg-[#181822] text-gray-400 hover:text-white border border-white/5'
+                }`}
+              >
+                الكل
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRecommendationFilter('artist')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                  recommendationFilter === 'artist'
+                    ? 'bg-white text-black'
+                    : 'bg-[#181822] text-gray-400 hover:text-white border border-white/5'
+                }`}
+                title={`أغاني الفنان: ${activeSong.artist}`}
+              >
+                {activeSong.artist}
+              </button>
+
+              {genreLabel && (
+                <button
+                  type="button"
+                  onClick={() => setRecommendationFilter('genre')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    recommendationFilter === 'genre'
+                      ? 'bg-white text-black'
+                      : 'bg-[#181822] text-gray-400 hover:text-white border border-white/5'
+                  }`}
+                  title={`أغاني من نمط: ${genreLabel}`}
+                >
+                  {genreLabel}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Suggestions List: Zero Images, pure typography */}
+          {displayedRecommendations.length === 0 ? (
+            <div className="text-center py-8 rounded-xl bg-[#14141c] border border-[#222232] space-y-2">
+              <Music className="w-6 h-6 text-gray-600 mx-auto" />
+              <p className="text-xs text-gray-400">
+                {isLoadingRemote
+                  ? 'جاري تحميل مقترحات مشابهة...'
+                  : 'لا توجد مقترحات إضافية حالياً، استخدم البحث لاستكشاف المزيد'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {displayedRecommendations.map(({ song, reason }, index) => {
+                const isCurrent =
+                  currentSong?.id === song.id ||
+                  currentSong?.provider_track_id === song.provider_track_id;
+                const isFav = isFavorite(song.id);
+
+                return (
+                  <div
+                    key={`rec-${song.id}-${index}`}
+                    className={`flex items-center justify-between p-3 rounded-xl transition-all group border ${
+                      isCurrent
+                        ? 'bg-white/10 border-white/20'
+                        : 'bg-[#14141c] hover:bg-[#1a1a26] border-[#222232]'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSongPlay(
+                          song,
+                          displayedRecommendations.map((r) => r.song)
+                        )
+                      }
+                      className="flex items-center gap-3 flex-1 min-w-0 text-right cursor-pointer"
+                    >
+                      <div className="w-6 text-center text-xs text-gray-500 font-mono flex-shrink-0">
+                        {isCurrent && isPlaying ? (
+                          <span className="inline-block w-2 h-2 rounded-full bg-white animate-pulse" />
+                        ) : (
+                          index + 1
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p
+                            className={`text-xs sm:text-sm font-semibold truncate ${
+                              isCurrent
+                                ? 'text-white font-bold'
+                                : 'text-gray-200 group-hover:text-white'
+                            }`}
+                          >
+                            {song.title}
+                          </p>
+                          <span
+                            className={`text-[9px] px-1.5 py-0.2 rounded font-medium flex-shrink-0 ${
+                              reason === 'artist'
+                                ? 'bg-white/10 text-gray-300'
+                                : 'bg-white/5 text-gray-400'
+                            }`}
+                          >
+                            {reason === 'artist' ? 'نفس المطرب' : 'نفس النمط'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-400 truncate mt-0.5">{song.artist}</p>
+                      </div>
+                    </button>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className="text-[11px] text-gray-500 font-mono px-1">
+                        {formatDuration(song.duration)}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleFavorite(song.id)}
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                          isFav
+                            ? 'text-red-400 hover:text-gray-400'
+                            : 'text-gray-500 hover:text-red-400 hover:bg-white/5'
+                        }`}
+                        title={isFav ? 'في المفضلة' : 'إضافة للمفضلة'}
+                        aria-label="Toggle favorite"
+                      >
+                        <Heart className={`w-3.5 h-3.5 ${isFav ? 'fill-current' : ''}`} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openAddToPlaylist(song)}
+                        className="p-1.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
+                        title="إضافة إلى قائمة تشغيل"
+                        aria-label="Add to playlist"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

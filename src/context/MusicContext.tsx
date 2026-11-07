@@ -32,7 +32,34 @@ interface MusicContextType {
   openSoundEnhancer: () => void;
   closeSoundEnhancer: () => void;
 
-  // Onboarding & App Tour
+  // Popup Modals for Sections
+  isPlaylistsModalOpen: boolean;
+  openPlaylistsModal: () => void;
+  closePlaylistsModal: () => void;
+  isFavoritesModalOpen: boolean;
+  openFavoritesModal: () => void;
+  closeFavoritesModal: () => void;
+  isQueueModalOpen: boolean;
+  openQueueModal: () => void;
+  closeQueueModal: () => void;
+  isLyricsModalOpen: boolean;
+  openLyricsModal: () => void;
+  closeLyricsModal: () => void;
+  isHistoryModalOpen: boolean;
+  openHistoryModal: () => void;
+  closeHistoryModal: () => void;
+
+  // Search Modal
+  isSearchModalOpen: boolean;
+  searchModalInitialQuery: string;
+  openSearchModal: (initialQuery?: string) => void;
+  closeSearchModal: () => void;
+  searchHistory: string[];
+  addSearchHistoryItem: (query: string) => void;
+  removeSearchHistoryItem: (query: string) => void;
+  clearSearchHistory: () => void;
+
+  // Sound Enhancer & Audio Mastering
   isTourOpen: boolean;
   openTour: () => void;
   closeTour: () => void;
@@ -75,7 +102,7 @@ interface MusicContextType {
   togglePlayPause: () => void;
   nextTrack: () => void;
   prevTrack: () => void;
-  seekTo: (seconds: number) => void;
+  seekTo: (seconds: number, isFinal?: boolean) => void;
   setVolume: (val: number) => void;
   toggleShuffle: () => void;
   cycleRepeatMode: () => void;
@@ -211,12 +238,63 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const isRTL = false;
 
   // Navigation
-  const [activeTab, setActiveTab] = useState<TabType>('search');
+  const [activeTab, setActiveTab] = useState<TabType>('home');
   const [isFullScreenPlayerOpen, setIsFullScreenPlayerOpen] = useState(false);
   const [isAddToPlaylistOpen, setIsAddToPlaylistOpen] = useState(false);
   const [songForPlaylistModal, setSongForPlaylistModal] = useState<Song | null>(null);
   const [isSoundEnhancerOpen, setIsSoundEnhancerOpen] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
+
+  // Section Modals
+  const [isPlaylistsModalOpen, setIsPlaylistsModalOpen] = useState(false);
+  const openPlaylistsModal = useCallback(() => setIsPlaylistsModalOpen(true), []);
+  const closePlaylistsModal = useCallback(() => setIsPlaylistsModalOpen(false), []);
+
+  const [isFavoritesModalOpen, setIsFavoritesModalOpen] = useState(false);
+  const openFavoritesModal = useCallback(() => setIsFavoritesModalOpen(true), []);
+  const closeFavoritesModal = useCallback(() => setIsFavoritesModalOpen(false), []);
+
+  const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
+  const openQueueModal = useCallback(() => setIsQueueModalOpen(true), []);
+  const closeQueueModal = useCallback(() => setIsQueueModalOpen(false), []);
+
+  const [isLyricsModalOpen, setIsLyricsModalOpen] = useState(false);
+  const openLyricsModal = useCallback(() => setIsLyricsModalOpen(true), []);
+  const closeLyricsModal = useCallback(() => setIsLyricsModalOpen(false), []);
+
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const openHistoryModal = useCallback(() => setIsHistoryModalOpen(true), []);
+  const closeHistoryModal = useCallback(() => setIsHistoryModalOpen(false), []);
+
+  // Search Modal & Recent Searches
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [searchModalInitialQuery, setSearchModalInitialQuery] = useState('');
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => StorageService.getSearchHistory());
+
+  const openSearchModal = useCallback((initialQuery?: string) => {
+    setSearchModalInitialQuery(initialQuery || '');
+    setIsSearchModalOpen(true);
+  }, []);
+
+  const closeSearchModal = useCallback(() => {
+    setIsSearchModalOpen(false);
+    setSearchModalInitialQuery('');
+  }, []);
+
+  const addSearchHistoryItem = useCallback((query: string) => {
+    const updated = StorageService.addSearchQuery(query);
+    setSearchHistory(updated);
+  }, []);
+
+  const removeSearchHistoryItem = useCallback((query: string) => {
+    const updated = StorageService.removeSearchQuery(query);
+    setSearchHistory(updated);
+  }, []);
+
+  const clearSearchHistory = useCallback(() => {
+    StorageService.clearSearchHistory();
+    setSearchHistory([]);
+  }, []);
 
   const openTour = useCallback(() => setIsTourOpen(true), []);
   const closeTour = useCallback(() => setIsTourOpen(false), []);
@@ -259,12 +337,15 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Playlists, Favorites, Songs Catalog
   const [recentSongs, setRecentSongs] = useState<Song[]>(() => StorageService.getRecentSongs());
-  const [allSongs, setAllSongs] = useState<Song[]>(() => StorageService.getRecentSongs());
+  const [allSongs, setAllSongs] = useState<Song[]>(() => {
+    const r = StorageService.getRecentSongs();
+    return r.length > 0 ? r : INITIAL_SONGS;
+  });
   const [playlists, setPlaylists] = useState<Playlist[]>(() => StorageService.getPlaylists());
   const [favorites, setFavorites] = useState<string[]>(() => StorageService.getFavorites());
 
-  // Player States (initialized with most recently played song if available, or null)
-  const initialSong = recentSongs[0] || null;
+  // Player States (initialized with most recently played song if available, or first song)
+  const initialSong = recentSongs[0] || INITIAL_SONGS[0] || null;
   const [currentSong, setCurrentSong] = useState<Song | null>(() => initialSong);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -276,7 +357,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [visualizerStyle, setVisualizerStyleState] = useState<VisualizerStyle>(() => settings.visualizerStyle || 'wave');
 
   // Queue
-  const [queue, setQueue] = useState<Song[]>(() => (recentSongs.length > 0 ? recentSongs : []));
+  const [queue, setQueue] = useState<Song[]>(() => (recentSongs.length > 0 ? recentSongs : INITIAL_SONGS));
   const [queueIndex, setQueueIndex] = useState<number>(0);
 
   // Sync LTR attribute on document
@@ -374,10 +455,13 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       },
       onError: (err) => {
         console.warn('YouTube Audio Player error handled:', err);
-        // If an embed restriction occurs on a specific video, smoothly advance to next playable track
-        setTimeout(() => {
-          handleNextTrackRef.current();
-        }, 1000);
+        const code = typeof err === 'object' && err !== null ? err.data : err;
+        // Only advance to next track on unrecoverable restricted or not found tracks (100, 101, 150)
+        if (code === 100 || code === 101 || code === 150) {
+          setTimeout(() => {
+            handleNextTrackRef.current();
+          }, 1500);
+        }
       },
     }, currentSong?.provider_track_id || 'KzJ7XZqp4rc');
   }, []);
@@ -479,8 +563,8 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     youtubeAudioService.setMediaSessionHandlers(handlers);
   }, [nextTrack, prevTrack]);
 
-  const seekTo = useCallback((seconds: number) => {
-    youtubeAudioService.seek(seconds);
+  const seekTo = useCallback((seconds: number, isFinal = true) => {
+    youtubeAudioService.seek(seconds, isFinal);
     setCurrentTime(seconds);
   }, []);
 
@@ -728,9 +812,33 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         songForPlaylistModal,
         openAddToPlaylist,
         closeAddToPlaylist,
+        isSearchModalOpen,
+        searchModalInitialQuery,
+        openSearchModal,
+        closeSearchModal,
+        searchHistory,
+        addSearchHistoryItem,
+        removeSearchHistoryItem,
+        clearSearchHistory,
         isSoundEnhancerOpen,
         openSoundEnhancer,
         closeSoundEnhancer,
+
+        isPlaylistsModalOpen,
+        openPlaylistsModal,
+        closePlaylistsModal,
+        isFavoritesModalOpen,
+        openFavoritesModal,
+        closeFavoritesModal,
+        isQueueModalOpen,
+        openQueueModal,
+        closeQueueModal,
+        isLyricsModalOpen,
+        openLyricsModal,
+        closeLyricsModal,
+        isHistoryModalOpen,
+        openHistoryModal,
+        closeHistoryModal,
 
         isTourOpen,
         openTour,

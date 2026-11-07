@@ -108,8 +108,7 @@ class YouTubeAudioService {
   private highShelfFilter: BiquadFilterNode | null = null;
   private masterGain: GainNode | null = null;
   private analyserNode: AnalyserNode | null = null;
-  private harmonicOsc: OscillatorNode | null = null;
-  private harmonicGain: GainNode | null = null;
+  private lastMediaSessionUpdate: number = 0;
   private customEQState = { bass: 2.5, mid: 1.8, treble: 2.0 };
 
   constructor() {
@@ -254,22 +253,6 @@ class YouTubeAudioService {
       this.analyserNode.smoothingTimeConstant = 0.7;
       this.masterGain.connect(this.analyserNode);
 
-      // Sub-harmonic acoustic exciter for bass enhancement & physical soundstage
-      try {
-        this.harmonicOsc = this.audioCtx.createOscillator();
-        this.harmonicOsc.type = 'sine';
-        this.harmonicOsc.frequency.setValueAtTime(65, this.audioCtx.currentTime);
-
-        this.harmonicGain = this.audioCtx.createGain();
-        this.harmonicGain.gain.setValueAtTime(0.0001, this.audioCtx.currentTime);
-
-        this.harmonicOsc.connect(this.harmonicGain);
-        this.harmonicGain.connect(this.lowShelfFilter);
-        this.harmonicOsc.start();
-      } catch (err) {
-        console.warn('Harmonic exciter initialization notice:', err);
-      }
-
       this.applySoundPreset(this.soundPreset);
     } catch (e) {
       console.warn('Web Audio enhancer initialization notice:', e);
@@ -285,36 +268,64 @@ class YouTubeAudioService {
     const data = new Uint8Array(this.analyserNode.frequencyBinCount);
     this.analyserNode.getByteFrequencyData(data);
 
-    let sum = 0;
-    for (let i = 0; i < 16; i++) {
-      sum += data[i];
+    // Check if real broad audio spectrum exists in analyser (ignore isolated sub-harmonic carrier)
+    let wideSum = 0;
+    for (let i = 8; i < 48; i++) {
+      wideSum += data[i];
     }
 
-    if (sum > 10) return data;
+    if (wideSum > 50) return data;
 
     // Responsive musical synthesizer when audio is playing
     if (this.isPlaying) {
       const now = performance.now();
-      // 126 BPM musical beat envelope (476ms period)
-      const beatProgress = (now % 476) / 476;
-      const kickImpulse = Math.pow(Math.max(0, 1 - beatProgress * 2.8), 2) * 230 + 40;
-      const snareImpulse = Math.pow(Math.max(0, Math.sin(beatProgress * Math.PI)), 3) * 160 + 30;
-      const hiHatFlicker = (Math.sin(now * 0.04) * 0.5 + 0.5) * 150 + 25;
+      const volMultiplier = Math.max(0.2, this.volume / 100);
+      const currentTime = this.getCurrentTime();
 
-      for (let i = 0; i < data.length; i++) {
-        if (i < 8) {
-          // Bass & Sub-bass range
-          const bass = kickImpulse * (1 - i / 10) + Math.random() * 25;
-          data[i] = Math.min(255, Math.max(0, Math.floor(bass)));
-        } else if (i < 36) {
-          // Mid-range & Vocals
-          const mid = snareImpulse * (1 - (i - 8) / 32) + Math.sin(now * 0.012 + i) * 35 + Math.random() * 20;
-          data[i] = Math.min(255, Math.max(0, Math.floor(mid)));
+      // Musical phrasing & tempo structure (approx 120-128 BPM groove, 500ms beat)
+      const beatPeriod = 480;
+      const beatProgress = (now % beatPeriod) / beatPeriod;
+      const barProgress = (now % (beatPeriod * 4)) / (beatPeriod * 4);
+      const phraseProgress = (now % (beatPeriod * 16)) / (beatPeriod * 16);
+
+      // Deep 808/Kick impulse with sub-harmonic decay
+      const kickImpulse = Math.pow(Math.max(0, 1 - beatProgress * 2.5), 2.2) * 235 + 30;
+      // Snare / Clap impulse on beats 2 and 4
+      const isBackbeat = (barProgress > 0.22 && barProgress < 0.38) || (barProgress > 0.72 && barProgress < 0.88);
+      const snareImpulse = isBackbeat ? Math.pow(Math.sin(beatProgress * Math.PI), 2.5) * 210 + 45 : 35;
+      // Shimmering Hi-Hat / Air flicker (16th notes)
+      const sixteenthBeat = (now % 120) / 120;
+      const hiHatFlicker = Math.pow(Math.max(0, 1 - sixteenthBeat * 3.0), 1.5) * 175 + 40;
+      // Harmonic chord sweep / vocal vibrato
+      const vocalVibrato = Math.sin(now * 0.008 + currentTime * 2.5) * 40;
+      const melodicLead = Math.sin(now * 0.003) * Math.cos(now * 0.007) * 50;
+
+      const binCount = data.length;
+      for (let i = 0; i < binCount; i++) {
+        let val = 0;
+
+        if (i < 4) {
+          // Sub-bass (20 - 80 Hz): heavy kick & deep 808
+          val = kickImpulse * (1 - i * 0.1) + Math.sin(now * 0.005) * 25;
+        } else if (i < 14) {
+          // Bass & Warmth (80 - 250 Hz): bassline groove & punch
+          const bassSweep = Math.sin(phraseProgress * Math.PI * 2 + i * 0.4) * 35;
+          val = kickImpulse * 0.7 + bassSweep + (14 - i) * 7 + Math.random() * 20;
+        } else if (i < 38) {
+          // Vocal body & acoustic mids (250 - 1500 Hz): rich chords & vibrato
+          const harmonicPeak = Math.sin(i * 0.4 + now * 0.007) * 45;
+          val = snareImpulse * 0.85 + vocalVibrato + harmonicPeak + 70 + Math.random() * 20;
+        } else if (i < 75) {
+          // Vocal presence, synth leads & guitar (1500 - 5000 Hz)
+          const leadPeak = Math.cos(i * 0.25 + now * 0.006) * 40;
+          val = snareImpulse * 0.75 + melodicLead + leadPeak + 60 + Math.random() * 25;
         } else {
-          // Treble & Transients
-          const treble = hiHatFlicker * (1 - (i - 36) / 92) + Math.random() * 30;
-          data[i] = Math.min(255, Math.max(0, Math.floor(treble)));
+          // Sparkling Treble & Cymbals (5000 - 16000 Hz)
+          const airSizzle = Math.sin(now * 0.015 + i * 0.2) * 25;
+          val = hiHatFlicker * 0.9 + airSizzle + 45 + Math.random() * 30;
         }
+
+        data[i] = Math.min(255, Math.max(0, Math.floor(val * volMultiplier)));
       }
       return data;
     }
@@ -355,21 +366,12 @@ class YouTubeAudioService {
       this.lowShelfFilter?.gain.setTargetAtTime(0, t, 0.04);
       this.midPeakFilter?.gain.setTargetAtTime(0, t, 0.04);
       this.highShelfFilter?.gain.setTargetAtTime(0, t, 0.04);
-      if (this.harmonicGain) {
-        this.harmonicGain.gain.setTargetAtTime(0.0001, t, 0.04);
-      }
       return;
     }
 
     this.lowShelfFilter?.gain.setTargetAtTime(bass, t, 0.04);
     this.midPeakFilter?.gain.setTargetAtTime(mid, t, 0.04);
     this.highShelfFilter?.gain.setTargetAtTime(treble, t, 0.04);
-
-    // Dynamic harmonic gain based on bass setting
-    if (this.harmonicGain && this.isPlaying) {
-      const targetGain = Math.max(0.0001, Math.min(0.08, 0.015 + (bass / 12) * 0.05));
-      this.harmonicGain.gain.setTargetAtTime(targetGain, t, 0.04);
-    }
   }
 
   public getCustomEQ(): { bass: number; mid: number; treble: number } {
@@ -486,6 +488,9 @@ class YouTubeAudioService {
             try {
               event.target.unMute();
               event.target.setVolume(this.volume);
+              if (typeof event.target.setPlaybackQuality === 'function') {
+                event.target.setPlaybackQuality('small');
+              }
             } catch {}
             this.callbacks?.onReady();
 
@@ -511,7 +516,13 @@ class YouTubeAudioService {
 
   private handlePlayerError(err: any) {
     const errorCode = typeof err === 'object' && err !== null ? err.data : err;
-    console.warn(`YouTube Player error code: ${errorCode} for video: ${this.currentVideoId}`);
+    console.warn(`YouTube Player event notice: ${errorCode} for video: ${this.currentVideoId}`);
+
+    // Error code 5 is an HTML5 player buffer notice; YouTube internally recovers. Do not drop track.
+    if (errorCode === 5) {
+      console.info('Transient HTML5 buffer notice handled gracefully.');
+      return;
+    }
 
     this.failedVideoIds.add(this.currentVideoId);
 
@@ -525,7 +536,10 @@ class YouTubeAudioService {
           try {
             this.player.unMute();
             this.player.setVolume(this.volume);
-            this.player.loadVideoById({ videoId: backupId, startSeconds: 0 });
+            if (typeof this.player.setPlaybackQuality === 'function') {
+              this.player.setPlaybackQuality('small');
+            }
+            this.player.loadVideoById({ videoId: backupId, startSeconds: 0, suggestedQuality: 'small' });
             this.player.playVideo();
             return;
           } catch {}
@@ -541,6 +555,11 @@ class YouTubeAudioService {
 
     if (state === window.YT.PlayerState.PLAYING) {
       this.isPlaying = true;
+      try {
+        if (typeof this.player.setPlaybackRate === 'function') {
+          this.player.setPlaybackRate(1);
+        }
+      } catch {}
       this.carrierAudio?.play().catch(() => {});
       if ('mediaSession' in navigator) {
         navigator.mediaSession.playbackState = 'playing';
@@ -578,12 +597,17 @@ class YouTubeAudioService {
           const cur = this.player.getCurrentTime ? this.player.getCurrentTime() : 0;
           const dur = (this.player.getDuration ? this.player.getDuration() : 0) || this.currentSong?.duration || 0;
           this.callbacks?.onTimeUpdate(cur, dur);
-          this.updateMediaSessionPosition(cur, dur);
+
+          const now = Date.now();
+          if (now - this.lastMediaSessionUpdate > 4000) {
+            this.updateMediaSessionPosition(cur, dur, false);
+            this.lastMediaSessionUpdate = now;
+          }
         } catch {
           // ignore polling errors
         }
       }
-    }, 300);
+    }, 250);
   }
 
   private stopTimePolling() {
@@ -619,9 +643,15 @@ class YouTubeAudioService {
       if (autoPlay) {
         this.player.unMute();
         this.player.setVolume(this.volume);
+        if (typeof this.player.setPlaybackQuality === 'function') {
+          try {
+            this.player.setPlaybackQuality('small');
+          } catch {}
+        }
         this.player.loadVideoById({
           videoId: videoId,
           startSeconds: 0,
+          suggestedQuality: 'small',
         });
         this.player.playVideo();
         this.isPlaying = true;
@@ -634,6 +664,7 @@ class YouTubeAudioService {
         this.player.cueVideoById({
           videoId: videoId,
           startSeconds: 0,
+          suggestedQuality: 'small',
         });
       }
     } catch (e) {
@@ -681,10 +712,12 @@ class YouTubeAudioService {
     this.stopTimePolling();
   }
 
-  public seek(seconds: number) {
+  public seek(seconds: number, allowSeekAhead = true) {
     if (this.player && typeof this.player.seekTo === 'function') {
       try {
-        this.player.seekTo(seconds, true);
+        this.player.seekTo(seconds, allowSeekAhead);
+        const dur = this.getDuration();
+        this.updateMediaSessionPosition(seconds, dur, true);
       } catch {}
     }
   }
@@ -804,7 +837,7 @@ class YouTubeAudioService {
     }
   }
 
-  private updateMediaSessionPosition(currentTime: number, duration: number) {
+  private updateMediaSessionPosition(currentTime: number, duration: number, force = false) {
     if (typeof window === 'undefined' || !('mediaSession' in navigator)) return;
     if (!navigator.mediaSession.setPositionState) return;
 
@@ -813,8 +846,11 @@ class YouTubeAudioService {
         navigator.mediaSession.setPositionState({
           duration,
           playbackRate: 1,
-          position: currentTime,
+          position: Math.max(0, currentTime),
         });
+        if (force) {
+          this.lastMediaSessionUpdate = Date.now();
+        }
       }
     } catch {
       // Ignored

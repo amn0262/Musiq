@@ -17,6 +17,7 @@ import {
   BarChart2,
   Disc,
   Activity,
+  User,
 } from 'lucide-react';
 
 export const SettingsScreen: React.FC = () => {
@@ -73,12 +74,8 @@ export const SettingsScreen: React.FC = () => {
       {/* User Profile Card */}
       <div className="p-5 sm:p-6 rounded-3xl bg-[#161622] border border-white/10 space-y-4">
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <img
-              src={user.avatar}
-              alt={user.name}
-              className="w-16 h-16 rounded-full object-cover border-2 border-purple-500/50"
-            />
+          <div className="w-14 h-14 rounded-2xl bg-white text-black flex items-center justify-center flex-shrink-0 shadow">
+            <User className="w-7 h-7" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">

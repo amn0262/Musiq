@@ -145,7 +145,7 @@ export const INITIAL_SONGS: Song[] = [
     artist: 'Majid Al Mohandis',
     artistAr: 'ماجد المهندس',
     album: 'Shahd Al Kalam',
-    artwork_url: 'https://images.unsplash.com/photo-1445985543469-433ecba627a0?q=80&w=600&auto=format&fit=crop',
+    artwork_url: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?q=80&w=600&auto=format&fit=crop',
     duration: 285,
     category: 'arabic',
     source: 'youtube',

@@ -284,6 +284,39 @@ function youtubeApiPlugin(): Plugin {
           }
         }
 
+        // 4. YouTube MP3 Download Info Endpoint
+        if (req.url.startsWith('/api/youtube/download-info')) {
+          try {
+            const parsedUrl = new URL(req.url, 'http://localhost');
+            const videoId = (parsedUrl.searchParams.get('videoId') || '').trim();
+            const title = (parsedUrl.searchParams.get('title') || '').trim();
+
+            if (!videoId) {
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ error: 'Missing videoId' }));
+            }
+
+            const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(
+              JSON.stringify({
+                videoId,
+                title,
+                formats: ['320kbps', '192kbps', '128kbps'],
+                downloadUrls: {
+                  server1: `https://ytmp3.nu/${videoId}`,
+                  server2: `https://y2mate.nu/convert?url=${encodeURIComponent(ytUrl)}`,
+                  server3: `https://loader.to/api/button/?url=${encodeURIComponent(ytUrl)}&f=mp3`,
+                  server4: `https://ezmp3.cc/`,
+                },
+              })
+            );
+          } catch (e: any) {
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ error: e.message }));
+          }
+        }
+
         next();
       });
     },

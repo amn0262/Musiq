@@ -1,5 +1,6 @@
 import { Playlist, UserProfile, Song } from '../types/music';
 import { INITIAL_PLAYLISTS } from '../data/catalog';
+import { addSearchQueryToHistory, removeSearchQueryFromHistory } from '../utils/searchRules';
 
 const STORAGE_KEYS = {
   PLAYLISTS: 'musiq_playlists_v1',
@@ -133,31 +134,29 @@ export class StorageService {
     } catch (e) {
       console.warn(e);
     }
-    return ['Coldplay', 'Adele', 'The Weeknd', 'Dua Lipa', 'Billie Eilish'];
+    return ['فيروز', 'عمرو دياب', 'أم كلثوم', 'Coldplay', 'The Weeknd'];
   }
 
   public static addSearchQuery(query: string): string[] {
-    const q = query.trim();
-    if (!q) return this.getSearchHistory();
-    const history = this.getSearchHistory().filter((item) => item.toLowerCase() !== q.toLowerCase());
-    history.unshift(q);
-    const capped = history.slice(0, 15);
+    const history = this.getSearchHistory();
+    const updated = addSearchQueryToHistory(history, query, 15);
     try {
-      localStorage.setItem(STORAGE_KEYS.SEARCH_HISTORY, JSON.stringify(capped));
+      localStorage.setItem(STORAGE_KEYS.SEARCH_HISTORY, JSON.stringify(updated));
     } catch (e) {
       console.warn(e);
     }
-    return capped;
+    return updated;
   }
 
   public static removeSearchQuery(query: string): string[] {
-    const history = this.getSearchHistory().filter((item) => item !== query);
+    const history = this.getSearchHistory();
+    const updated = removeSearchQueryFromHistory(history, query);
     try {
-      localStorage.setItem(STORAGE_KEYS.SEARCH_HISTORY, JSON.stringify(history));
+      localStorage.setItem(STORAGE_KEYS.SEARCH_HISTORY, JSON.stringify(updated));
     } catch (e) {
       console.warn(e);
     }
-    return history;
+    return updated;
   }
 
   public static clearSearchHistory(): void {

@@ -13,7 +13,7 @@ import {
   Music,
 } from 'lucide-react';
 
-type LibraryTab = 'favorites' | 'history' | 'playlists';
+type LibraryTab = 'favorites' | 'playlists' | 'history';
 
 export const LibraryScreen: React.FC = () => {
   const {
@@ -46,16 +46,16 @@ export const LibraryScreen: React.FC = () => {
   };
 
   const tabs: { id: LibraryTab; label: string; count: number; icon: React.ElementType }[] = [
-    { id: 'favorites', label: 'Favorites', count: favoriteSongs.length, icon: Heart },
-    { id: 'playlists', label: 'Playlists', count: playlists.length, icon: ListMusic },
-    { id: 'history', label: 'History', count: recentlyPlayed.length, icon: History },
+    { id: 'favorites', label: 'المفضلة', count: favoriteSongs.length, icon: Heart },
+    { id: 'playlists', label: 'قوائم التشغيل', count: playlists.length, icon: ListMusic },
+    { id: 'history', label: 'السجل', count: recentlyPlayed.length, icon: History },
   ];
 
   return (
     <div className="space-y-4 pb-32">
       {/* Header */}
       <div>
-        <h1 className="text-lg sm:text-xl font-bold text-white">Library</h1>
+        <h1 className="text-lg sm:text-xl font-bold text-white">المكتبة الموسيقية</h1>
       </div>
 
       {/* Sub Tabs */}
@@ -91,7 +91,7 @@ export const LibraryScreen: React.FC = () => {
             <div className="text-center py-14 bg-[#121217] rounded-xl border border-[#22222e] space-y-2">
               <Heart className="w-8 h-8 text-gray-600 mx-auto" />
               <p className="text-sm font-semibold text-gray-400">
-                No favorites yet
+                لا توجد أغانٍ في المفضلة بعد
               </p>
             </div>
           ) : (
@@ -142,7 +142,7 @@ export const LibraryScreen: React.FC = () => {
                     <button
                       onClick={() => toggleFavorite(song.id)}
                       className="p-1.5 text-white hover:text-gray-300 transition-colors cursor-pointer"
-                      title="Remove from favorites"
+                      title="حذف من المفضلة"
                       aria-label="Remove from favorites"
                     >
                       <Heart className="w-4 h-4 fill-white" />
@@ -151,6 +151,7 @@ export const LibraryScreen: React.FC = () => {
                       onClick={() => openAddToPlaylist(song)}
                       className="p-1.5 text-gray-500 hover:text-gray-300 cursor-pointer"
                       aria-label="Add to playlist"
+                      title="إضافة لقائمة التشغيل"
                     >
                       <PlusCircle className="w-4 h-4" />
                     </button>
@@ -177,7 +178,7 @@ export const LibraryScreen: React.FC = () => {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-white truncate">{pl.name}</p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {pl.song_ids.length} songs
+                  {pl.song_ids.length} أغنية
                 </p>
               </div>
             </div>
@@ -190,7 +191,7 @@ export const LibraryScreen: React.FC = () => {
         <div className="space-y-2">
           <div className="flex items-center justify-between pb-1">
             <p className="text-xs text-gray-400">
-              {recentlyPlayed.length} tracks
+              {recentlyPlayed.length} مقطع
             </p>
             {recentlyPlayed.length > 0 && (
               <button
@@ -198,7 +199,7 @@ export const LibraryScreen: React.FC = () => {
                 className="text-xs font-semibold text-gray-400 hover:text-white flex items-center gap-1 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Clear History</span>
+                <span>مسح السجل</span>
               </button>
             )}
           </div>

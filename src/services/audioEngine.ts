@@ -44,8 +44,8 @@ class AudioEngineFacade {
     youtubeAudioService.pause();
   }
 
-  public seek(seconds: number) {
-    youtubeAudioService.seek(seconds);
+  public seek(seconds: number, allowSeekAhead = true) {
+    youtubeAudioService.seek(seconds, allowSeekAhead);
   }
 
   public setVolume(val: number) {
